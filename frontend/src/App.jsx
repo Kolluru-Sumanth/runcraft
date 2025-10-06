@@ -10,9 +10,6 @@ function App() {
     <Router>
       <ChatProvider>
         <Routes>
-          {/* Default route redirect */}
-          <Route path="/" element={<Navigate to="/new-chat" replace />} />
-
           {/* Routes */}
           <Route path="/new-chat" element={<NewChat />} />
           <Route path="/chat/:id" element={<ChatPreview />} />
