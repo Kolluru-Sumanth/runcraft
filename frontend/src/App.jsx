@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import SignIn from './components/SignIn';
