@@ -10,6 +10,18 @@ const n8nService = require('../services/n8nService');
 
 const router = express.Router();
 
+// @desc    Test endpoint
+// @route   GET /api/test
+// @access  Private
+router.get('/test', protect, async (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Backend connection successful',
+    user: req.user ? req.user.name : 'Unknown',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public

@@ -31,6 +31,13 @@ function WorkflowApp({ activeMenu: propActiveMenu }) {
   
   const activeMenu = propActiveMenu || getActiveMenuFromPath();
   
+  // Auto-collapse sidebar when on upload page
+  useEffect(() => {
+    if (activeMenu === 'upload') {
+      setIsSidebarCollapsed(true);
+    }
+  }, [activeMenu]);
+  
   const setActiveMenu = (menu) => {
     const routeMap = {
       dashboard: '/dashboard',
