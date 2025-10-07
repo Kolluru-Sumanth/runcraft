@@ -3,6 +3,7 @@ const multer = require('multer');
 const { protect } = require('../middleware/auth');
 const Workflow = require('../models/Workflow');
 const workflowAnalysisService = require('../services/workflowAnalysisService');
+const llmWorkflowService = require('../services/llmWorkflowService');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -59,7 +60,7 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
     const credentialRequirements = workflowAnalysisService.detectCredentialRequirements(workflowData);
     const triggerInfo = workflowAnalysisService.analyzeTriggers(workflowData);
 
-    // Create workflow record
+    // Create workflow record first to get the ID
     const workflow = new Workflow({
       name: workflowData.name || req.file.originalname.replace('.json', ''),
       description: workflowData.meta?.description || '',
@@ -73,8 +74,169 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
 
     await workflow.save();
 
+    // Perform LLM analysis with the workflow ID
+    let llmAnalysis = null;
+    try {
+      console.log('🤖 Starting LLM analysis...');
+      llmAnalysis = await llmWorkflowService.analyzeWorkflowWithLLM(
+        workflowData, 
+        workflow._id.toString(), 
+        req.user._id.toString()
+      );
+      console.log('🤖 LLM analysis completed successfully');
+      console.log('🤖 LLM analysis type check:', typeof llmAnalysis);
+      console.log('🤖 Webhook URLs type:', typeof llmAnalysis?.webhookUrls);
+      console.log('🤖 Webhook URLs:', JSON.stringify(llmAnalysis?.webhookUrls, null, 2));
+      
+      // Create a clean llmAnalysis object WITHOUT webhookUrls first
+      const cleanLLMAnalysis = {
+        purpose: llmAnalysis.purpose || '',
+        inputMethods: Array.isArray(llmAnalysis.inputMethods) ? llmAnalysis.inputMethods : [],
+        dataFlow: llmAnalysis.dataFlow || '',
+        integrations: Array.isArray(llmAnalysis.integrations) ? llmAnalysis.integrations : [],
+        webhookSuggestions: Array.isArray(llmAnalysis.webhookSuggestions) ? llmAnalysis.webhookSuggestions : [],
+        urlPatterns: Array.isArray(llmAnalysis.urlPatterns) ? llmAnalysis.urlPatterns : [],
+        insights: Array.isArray(llmAnalysis.insights) ? llmAnalysis.insights : [],
+        confidence: llmAnalysis.confidence || 'medium',
+        generatedAt: new Date(),
+        llmModel: llmAnalysis.llmModel || '',
+        fallback: Boolean(llmAnalysis.fallback || false),
+        // TEMPORARILY EXCLUDE webhookUrls to test schema
+        webhookUrls: []
+      };
+      
+      console.log('🔧 Testing save without webhook URLs data...');
+      
+      // Set the entire llmAnalysis object at once
+      workflow.llmAnalysis = cleanLLMAnalysis;
+      await workflow.save();
+      
+      console.log('✅ Save succeeded without webhookUrls! Schema is working for other fields.');
+      console.log('🔧 Now testing webhookUrls schema specifically...');
+      
+      // Try to add just one webhook URL to test the schema
+      if (llmAnalysis.webhookUrls && Array.isArray(llmAnalysis.webhookUrls) && llmAnalysis.webhookUrls.length > 0) {
+        const testUrl = {
+          id: String(llmAnalysis.webhookUrls[0].id || 'test'),
+          type: String(llmAnalysis.webhookUrls[0].type || 'test'),
+          method: String(llmAnalysis.webhookUrls[0].method || 'POST'),
+          url: String(llmAnalysis.webhookUrls[0].url || ''),
+          description: String(llmAnalysis.webhookUrls[0].description || ''),
+          expectedPayload: String(llmAnalysis.webhookUrls[0].expectedPayload || ''),
+          generated: Boolean(llmAnalysis.webhookUrls[0].generated !== undefined ? llmAnalysis.webhookUrls[0].generated : true),
+          source: String(llmAnalysis.webhookUrls[0].source || 'system')
+        };
+        
+        console.log('🔧 Testing single webhook URL:', JSON.stringify(testUrl, null, 2));
+        
+        try {
+          workflow.llmAnalysis.webhookUrls = [testUrl];
+          await workflow.save();
+          console.log('✅ Single webhook URL save succeeded!');
+          
+          // Now try all webhook URLs
+          const allUrls = llmAnalysis.webhookUrls.map(url => ({
+            id: String(url.id || ''),
+            type: String(url.type || ''),
+            method: String(url.method || 'POST'),
+            url: String(url.url || ''),
+            description: String(url.description || ''),
+            expectedPayload: String(url.expectedPayload || ''),
+            generated: Boolean(url.generated !== undefined ? url.generated : true),
+            source: String(url.source || 'system')
+          }));
+          
+          workflow.llmAnalysis.webhookUrls = allUrls;
+          await workflow.save();
+          console.log('✅ All webhook URLs saved successfully!');
+          
+        } catch (webhookError) {
+          console.error('❌ Webhook URL schema error:', webhookError.message);
+          console.error('❌ This confirms the schema issue is specifically with webhookUrls');
+        }
+      }
+    } catch (llmError) {
+      console.error('🤖 LLM analysis failed:', llmError.message);
+      console.error('🤖 LLM error stack:', llmError.stack);
+      console.warn('⚠️ Continuing with basic analysis (LLM unavailable)');
+      // Don't throw error, continue with basic analysis
+    }
+
     // Add to deployment history
     await workflow.addDeploymentHistory('uploaded', 'Workflow uploaded and analyzed');
+
+    // Try to automatically deploy to n8n if user has configuration
+    let deploymentResult = null;
+    console.log('🔍 Checking user n8n config...');
+    console.log('User ID:', req.user._id);
+    console.log('User n8nConfig exists:', !!req.user.n8nConfig);
+    
+    if (req.user.n8nConfig) {
+      console.log('n8nConfig details:');
+      console.log('  - isConnected:', req.user.n8nConfig.isConnected);
+      console.log('  - serverUrl:', req.user.n8nConfig.serverUrl);
+      console.log('  - userId:', req.user.n8nConfig.userId);
+      console.log('  - apiKey exists:', !!req.user.n8nConfig.apiKey);
+    }
+    
+    if (req.user.n8nConfig?.isConnected) {
+      console.log('🚀 User has n8n config, attempting auto-deployment...');
+      
+      try {
+        console.log('📤 Calling workflowAnalysisService.uploadWorkflowToN8n...');
+        const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
+          workflow.workflowData,
+          req.user.n8nConfig.userId
+        );
+
+        console.log('📥 Deploy result received:', deployResult);
+
+        if (deployResult.success) {
+          console.log('✅ Auto-deployment to n8n successful!');
+          
+          // Update workflow with n8n ID and status
+          workflow.n8nWorkflowId = deployResult.workflowId;
+          workflow.status = credentialRequirements.length > 0 ? 'credentials_pending' : 'deployed';
+          workflow.lastDeployment = new Date();
+
+          // Update trigger URLs with the actual n8n workflow ID
+          workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
+            workflow.workflowData, 
+            deployResult.workflowId
+          );
+
+          await workflow.save();
+          await workflow.addDeploymentHistory('deployed', `Auto-deployed with ID: ${deployResult.workflowId}`);
+          
+          deploymentResult = {
+            deployed: true,
+            workflowId: deployResult.workflowId,
+            triggerInfo: workflow.triggerInfo
+          };
+          
+          console.log('📍 Updated trigger URLs:', workflow.triggerInfo);
+        } else {
+          console.error('❌ Auto-deployment failed:', deployResult.error);
+          deploymentResult = {
+            deployed: false,
+            error: deployResult.error
+          };
+        }
+      } catch (deployError) {
+        console.error('❌ Auto-deployment error:', deployError.message);
+        console.error('❌ Full error:', deployError);
+        deploymentResult = {
+          deployed: false,
+          error: deployError.message
+        };
+      }
+    } else {
+      console.log('⚠️ User does not have n8n configuration, skipping auto-deployment');
+      deploymentResult = {
+        deployed: false,
+        reason: 'No n8n configuration found for user'
+      };
+    }
 
     res.status(201).json({
       status: 'success',
@@ -82,16 +244,35 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
       data: {
         workflow: workflow.summary,
         credentialRequirements,
-        triggerInfo,
-        needsCredentials: credentialRequirements.length > 0
+        triggerInfo: workflow.triggerInfo,
+        llmAnalysis,
+        needsCredentials: credentialRequirements.length > 0,
+        webhookUrls: llmAnalysis?.webhookUrls || [],
+        deployment: deploymentResult
       }
     });
 
   } catch (error) {
-    console.error('Workflow upload error:', error);
+    console.error('❌ Workflow upload error:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    
+    // More specific error messages based on error type
+    let errorMessage = 'Error uploading workflow';
+    if (error.name === 'ValidationError') {
+      errorMessage = 'Validation error: ' + error.message;
+    } else if (error.name === 'MongoError') {
+      errorMessage = 'Database error occurred';
+    } else if (error.message.includes('LLM')) {
+      errorMessage = 'AI analysis failed, but workflow was saved';
+    }
+    
     res.status(500).json({
       status: 'error',
-      message: 'Error uploading workflow'
+      message: errorMessage,
+      ...(process.env.NODE_ENV === 'development' && { 
+        errorDetails: error.message,
+        errorType: error.name 
+      })
     });
   }
 });
@@ -400,12 +581,41 @@ router.post('/:id/credentials', protect, async (req, res) => {
     // Update workflow credential status
     await workflow.updateCredentialStatus(nodeId, true, createResult.credentialId);
 
+    // Check if all credentials are now configured and auto-activate if ready
+    const autoActivateResult = await workflowAnalysisService.autoActivateWorkflowIfReady(workflow);
+    
+    let responseMessage = 'Credential created successfully';
+    let additionalData = {};
+
+    if (autoActivateResult.shouldActivate) {
+      if (autoActivateResult.success) {
+        responseMessage += ' and workflow activated automatically';
+        
+        // Update workflow status
+        await workflow.activate();
+        
+        // Get updated trigger URLs
+        const triggerResult = await workflowAnalysisService.getWorkflowWithTriggerUrls(workflow.n8nWorkflowId);
+        if (triggerResult.success) {
+          workflow.triggerInfo = triggerResult.triggerInfo;
+          await workflow.save();
+          additionalData.triggerInfo = triggerResult.triggerInfo;
+        }
+        
+        additionalData.activated = true;
+      } else {
+        responseMessage += `, but auto-activation failed: ${autoActivateResult.message}`;
+        additionalData.activationError = autoActivateResult.error;
+      }
+    }
+
     res.json({
       status: 'success',
-      message: 'Credential created successfully',
+      message: responseMessage,
       data: {
         credentialId: createResult.credentialId,
-        workflow: workflow.summary
+        workflow: workflow.summary,
+        ...additionalData
       }
     });
 

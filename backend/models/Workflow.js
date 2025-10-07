@@ -101,6 +101,65 @@ const workflowSchema = new mongoose.Schema({
       required: true
     }
   }],
+  llmAnalysis: {
+    purpose: {
+      type: String,
+      required: false
+    },
+    inputMethods: [{
+      type: String,
+      required: false
+    }],
+    dataFlow: {
+      type: String,
+      required: false
+    },
+    integrations: [{
+      type: String,
+      required: false
+    }],
+    webhookSuggestions: [{
+      endpoint: String,
+      method: String,
+      description: String,
+      expectedPayload: String
+    }],
+    urlPatterns: [{
+      pattern: String,
+      description: String
+    }],
+    insights: [{
+      type: String,
+      required: false
+    }],
+    webhookUrls: [{
+      id: String,
+      type: { type: String }, // Fixed: proper Mongoose syntax for 'type' field
+      method: String,
+      url: String,
+      description: String,
+      expectedPayload: String,
+      generated: Boolean,
+      source: String
+    }],
+    confidence: {
+      type: String,
+      enum: ['high', 'medium', 'low'],
+      default: 'medium'
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now
+    },
+    llmModel: {
+      type: String,
+      required: false
+    },
+    fallback: {
+      type: Boolean,
+      default: false
+    }
+  },
   deploymentHistory: [{
     action: {
       type: String,

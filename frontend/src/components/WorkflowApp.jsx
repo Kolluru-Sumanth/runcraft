@@ -1,13 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 
-function WorkflowApp() {
+function WorkflowApp({ activeMenu: propActiveMenu }) {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [workflow, setWorkflow] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  
+  // Determine active menu from route or prop
+  const getActiveMenuFromPath = () => {
+    const path = location.pathname;
+    if (path.includes('/upload-workflow')) return 'upload';
+    if (path.includes('/workflows')) return 'workflows';
+    if (path.includes('/templates')) return 'templates';
+    if (path.includes('/executions')) return 'executions';
+    if (path.includes('/credentials')) return 'credentials';
+    if (path.includes('/settings')) return 'settings';
+    return 'dashboard';
+  };
+  
+  const activeMenu = propActiveMenu || getActiveMenuFromPath();
+  
+  const setActiveMenu = (menu) => {
+    const routeMap = {
+      dashboard: '/dashboard',
+      upload: '/upload-workflow',
+      workflows: '/workflows',
+      templates: '/templates',
+      executions: '/executions',
+      credentials: '/credentials',
+      settings: '/settings'
+    };
+    navigate(routeMap[menu] || '/dashboard');
+  };
 
   const handleFileUpload = (workflowData) => {
     setWorkflow(workflowData);
@@ -26,6 +56,31 @@ function WorkflowApp() {
       alert('Failed to generate UI. Please try again.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Test function to check backend connection
+  const testBackendConnection = async () => {
+    try {
+      const backendURL = import.meta.env.DEV 
+        ? 'http://localhost:5000/api'
+        : '/api';
+      
+      console.log('🔧 Testing connection to:', `${backendURL}/health`);
+      
+      const response = await fetch(`${backendURL}/health`);
+      console.log('🔧 Health check response:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔧 Health check data:', data);
+        alert('✅ Backend connection successful!');
+      } else {
+        alert('❌ Backend connection failed!');
+      }
+    } catch (error) {
+      console.error('🔧 Connection test failed:', error);
+      alert(`❌ Connection error: ${error.message}`);
     }
   };
 
@@ -377,9 +432,20 @@ function EnhancedSidebar({
                 color: 'white',
                 fontSize: '0.875rem',
                 fontWeight: '600',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
               }}
-              title={user?.name || 'User'}
+              title={`${user?.name || 'User'} - Click to expand sidebar`}
+              onClick={onToggleCollapse}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#5a67d8';
+                e.target.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#667eea';
+                e.target.style.transform = 'scale(1)';
+              }}
               >
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
@@ -1253,6 +1319,8 @@ function UploadPanel({ onFileUpload, user, workflow }) {
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileUpload = async (file) => {
+    console.log('🔧 Debug: Starting file upload process...');
+    
     if (!file || !file.name.endsWith('.json')) {
       alert('Please select a valid JSON file.');
       return;
@@ -1260,21 +1328,75 @@ function UploadPanel({ onFileUpload, user, workflow }) {
 
     setIsUploading(true);
     try {
-      const text = await file.text();
-      const workflowData = JSON.parse(text);
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('workflow', file);
+
+      // Get auth token (using correct key)
+      const token = localStorage.getItem('runcraft_token');
+      console.log('🔧 Debug: Token exists:', !!token);
       
-      if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
-        throw new Error('Invalid workflow format');
+      // Upload to backend with LLM analysis - explicit URL for debugging
+      const backendURL = import.meta.env.DEV 
+        ? 'http://localhost:5000/api'
+        : '/api';
+      
+      console.log('🔧 Debug: Environment DEV:', import.meta.env.DEV);
+      console.log('🔧 Debug: Backend URL:', backendURL);
+      console.log('🔧 Debug: Full URL:', `${backendURL}/workflows/upload`);
+      
+      const response = await fetch(`${backendURL}/workflows/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      console.log('🔧 Debug: Response status:', response.status);
+      console.log('🔧 Debug: Response headers:', response.headers);
+
+      if (!response.ok) {
+        console.log('🔧 Debug: Response not OK, attempting to read error...');
+        const errorText = await response.text();
+        console.log('🔧 Debug: Error response text:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText || `HTTP ${response.status}` };
+        }
+        throw new Error(errorData.message || 'Upload failed');
       }
 
-      onFileUpload({
-        name: file.name.replace('.json', ''),
-        nodeCount: workflowData.nodes.length,
-        ...workflowData
-      });
+      const result = await response.json();
+      
+      // Extract workflow data and LLM analysis
+      const workflowWithAnalysis = {
+        name: result.data.workflow.name,
+        nodeCount: result.data.workflow.nodeCount,
+        llmAnalysis: result.data.llmAnalysis,
+        webhookUrls: result.data.webhookUrls,
+        credentialRequirements: result.data.credentialRequirements,
+        triggerInfo: result.data.triggerInfo,
+        workflowId: result.data.workflow._id,
+        status: result.data.workflow.status,
+        uploadedAt: new Date().toISOString()
+      };
+
+      onFileUpload(workflowWithAnalysis);
+      
+      // Show success message
+      if (result.data.llmAnalysis) {
+        alert(`Workflow uploaded successfully! AI analysis completed with ${result.data.llmAnalysis.confidence} confidence.`);
+      } else {
+        alert('Workflow uploaded successfully! Basic analysis completed (AI analysis unavailable).');
+      }
+
     } catch (error) {
-      console.error('Error parsing workflow:', error);
-      alert('Error parsing workflow file. Please check the format.');
+      console.error('Error uploading workflow:', error);
+      alert(`Error uploading workflow: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -1565,8 +1687,10 @@ function UploadPanel({ onFileUpload, user, workflow }) {
   );
 }
 
-// Right Preview Panel Component
+// Right Preview Panel Component with LLM Analysis
 function PreviewPanel({ workflow, isGenerating, onGenerateUI, user }) {
+  const [activeTab, setActiveTab] = useState('analysis');
+  
   if (!workflow) {
     return (
       <div style={{ 
@@ -1592,15 +1716,14 @@ function PreviewPanel({ workflow, isGenerating, onGenerateUI, user }) {
           color: '#9ca3af', 
           margin: '0 0 1rem 0' 
         }}>
-          Frontend Preview
+          Workflow Analysis
         </h3>
         <p style={{ 
           color: '#9ca3af', 
           fontSize: '1rem', 
           maxWidth: '24rem' 
         }}>
-          Upload a workflow to see the generated React frontend appear here. 
-          Your UI components will be automatically created based on your n8n workflow structure.
+          Upload a workflow to see AI-powered analysis, webhook URLs, and intelligent insights about your n8n workflow.
         </p>
       </div>
     );
@@ -1635,18 +1758,21 @@ function PreviewPanel({ workflow, isGenerating, onGenerateUI, user }) {
           color: '#111827', 
           margin: '0 0 1rem 0' 
         }}>
-          Generating Frontend...
+          Analyzing Workflow...
         </h3>
         <p style={{ 
           color: '#6b7280', 
           fontSize: '1rem' 
         }}>
-          Creating React components from your workflow
+          AI is analyzing your workflow and generating webhook URLs
         </p>
       </div>
     );
   }
 
+  const llmAnalysis = workflow.llmAnalysis;
+  const webhookUrls = llmAnalysis?.webhookUrls || [];
+  
   return (
     <div style={{ 
       flex: 1,
@@ -1656,7 +1782,7 @@ function PreviewPanel({ workflow, isGenerating, onGenerateUI, user }) {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Preview Header */}
+      {/* Header */}
       <div style={{ 
         padding: '1.5rem',
         borderBottom: '1px solid #e5e7eb',
@@ -1678,72 +1804,508 @@ function PreviewPanel({ workflow, isGenerating, onGenerateUI, user }) {
             fontSize: '0.875rem',
             margin: 0 
           }}>
-            {workflow.nodeCount} nodes • Ready for generation
+            {workflow.nodeCount} nodes • {llmAnalysis ? `Analyzed with ${llmAnalysis.confidence} confidence` : 'Basic analysis'}
           </p>
         </div>
-        <button
-          onClick={onGenerateUI}
-          style={{
-            backgroundColor: '#667eea',
-            color: 'white',
-            fontWeight: '500',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '0.5rem',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#5a67d8'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = '#667eea'}
-        >
-          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          Generate Frontend
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {llmAnalysis?.confidence && (
+            <span style={{
+              backgroundColor: llmAnalysis.confidence === 'high' ? '#10b981' : 
+                             llmAnalysis.confidence === 'medium' ? '#f59e0b' : '#ef4444',
+              color: 'white',
+              fontSize: '0.75rem',
+              fontWeight: '500',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '0.375rem'
+            }}>
+              {llmAnalysis.confidence.toUpperCase()}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Preview Content */}
+      {/* Tabs */}
+      <div style={{ 
+        display: 'flex',
+        borderBottom: '1px solid #e5e7eb',
+        backgroundColor: '#f9fafb'
+      }}>
+        {['analysis', 'webhooks', 'insights'].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '0.75rem 1rem',
+              backgroundColor: activeTab === tab ? '#ffffff' : 'transparent',
+              border: 'none',
+              borderBottom: activeTab === tab ? '2px solid #667eea' : '2px solid transparent',
+              color: activeTab === tab ? '#667eea' : '#6b7280',
+              fontWeight: activeTab === tab ? '600' : '500',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {tab === 'webhooks' ? 'Webhook URLs' : tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
       <div style={{ 
         flex: 1,
-        padding: '2rem',
-        backgroundColor: '#f8fafc',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        padding: '1.5rem',
+        overflow: 'auto'
       }}>
-        <div style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '0.5rem',
-          border: '1px solid #e5e7eb',
-          padding: '3rem',
-          textAlign: 'center',
-          maxWidth: '24rem'
+        {activeTab === 'analysis' && (
+          <AnalysisTab llmAnalysis={llmAnalysis} workflow={workflow} />
+        )}
+        {activeTab === 'webhooks' && (
+          <WebhooksTab webhookUrls={webhookUrls} llmAnalysis={llmAnalysis} />
+        )}
+        {activeTab === 'insights' && (
+          <InsightsTab llmAnalysis={llmAnalysis} workflow={workflow} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Analysis Tab Component
+function AnalysisTab({ llmAnalysis, workflow }) {
+  if (!llmAnalysis) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
+          LLM analysis not available. Upload the workflow again to get AI-powered insights.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Purpose */}
+      <div>
+        <h4 style={{ 
+          fontSize: '1rem', 
+          fontWeight: '600', 
+          color: '#111827', 
+          margin: '0 0 0.5rem 0' 
         }}>
-          <div style={{ color: '#d1d5db', marginBottom: '1.5rem' }}>
-            <svg style={{ margin: '0 auto', height: '4rem', width: '4rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
+          Workflow Purpose
+        </h4>
+        <p style={{ 
+          color: '#6b7280', 
+          fontSize: '0.875rem', 
+          lineHeight: '1.5',
+          margin: 0,
+          backgroundColor: '#f9fafb',
+          padding: '0.75rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #e5e7eb'
+        }}>
+          {llmAnalysis.purpose}
+        </p>
+      </div>
+
+      {/* Data Flow */}
+      <div>
+        <h4 style={{ 
+          fontSize: '1rem', 
+          fontWeight: '600', 
+          color: '#111827', 
+          margin: '0 0 0.5rem 0' 
+        }}>
+          Data Flow
+        </h4>
+        <p style={{ 
+          color: '#6b7280', 
+          fontSize: '0.875rem', 
+          lineHeight: '1.5',
+          margin: 0,
+          backgroundColor: '#f9fafb',
+          padding: '0.75rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #e5e7eb'
+        }}>
+          {llmAnalysis.dataFlow}
+        </p>
+      </div>
+
+      {/* Input Methods */}
+      <div>
+        <h4 style={{ 
+          fontSize: '1rem', 
+          fontWeight: '600', 
+          color: '#111827', 
+          margin: '0 0 0.5rem 0' 
+        }}>
+          Input Methods
+        </h4>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {llmAnalysis.inputMethods?.map((method, index) => (
+            <span
+              key={index}
+              style={{
+                backgroundColor: '#e0e7ff',
+                color: '#3730a3',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.375rem'
+              }}
+            >
+              {method}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Integrations */}
+      {llmAnalysis.integrations?.length > 0 && (
+        <div>
           <h4 style={{ 
-            fontSize: '1.25rem', 
+            fontSize: '1rem', 
             fontWeight: '600', 
-            color: '#9ca3af', 
-            margin: '0 0 1rem 0'
+            color: '#111827', 
+            margin: '0 0 0.5rem 0' 
           }}>
-            Frontend Preview Area
+            Integrations
           </h4>
-          <p style={{ 
-            fontSize: '0.875rem', 
-            color: '#9ca3af', 
-            margin: 0,
-            lineHeight: '1.5'
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {llmAnalysis.integrations.map((integration, index) => (
+              <span
+                key={index}
+                style={{
+                  backgroundColor: '#f0fdf4',
+                  color: '#166534',
+                  fontSize: '0.75rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '0.375rem',
+                  border: '1px solid #bbf7d0'
+                }}
+              >
+                {integration}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Webhooks Tab Component
+function WebhooksTab({ webhookUrls, llmAnalysis }) {
+  const [copiedUrl, setCopiedUrl] = useState(null);
+
+  const copyToClipboard = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      setTimeout(() => setCopiedUrl(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  if (!webhookUrls || webhookUrls.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ color: '#d1d5db', marginBottom: '1rem' }}>
+          <svg style={{ margin: '0 auto', height: '3rem', width: '3rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </div>
+        <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
+          No webhook URLs generated. The workflow may not contain webhook triggers.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <p style={{ 
+        color: '#6b7280', 
+        fontSize: '0.875rem',
+        margin: '0 0 1rem 0',
+        padding: '0.75rem',
+        backgroundColor: '#eff6ff',
+        borderRadius: '0.5rem',
+        border: '1px solid #dbeafe'
+      }}>
+        💡 Use these webhook URLs to trigger your workflow from external services or applications.
+      </p>
+
+      {webhookUrls.map((webhook) => (
+        <div
+          key={webhook.id}
+          style={{
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.5rem',
+            padding: '1rem',
+            backgroundColor: '#ffffff'
+          }}
+        >
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: '0.5rem'
           }}>
-            Generated React components and UI preview will appear here after clicking "Generate Frontend".
-          </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                backgroundColor: webhook.method === 'POST' ? '#10b981' : '#f59e0b',
+                color: 'white',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.375rem'
+              }}>
+                {webhook.method || 'POST'}
+              </span>
+              <span style={{
+                backgroundColor: webhook.source === 'llm' ? '#8b5cf6' : '#6b7280',
+                color: 'white',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.375rem'
+              }}>
+                {webhook.source === 'llm' ? 'AI Generated' : 'System'}
+              </span>
+            </div>
+            <button
+              onClick={() => copyToClipboard(webhook.url)}
+              style={{
+                backgroundColor: copiedUrl === webhook.url ? '#10b981' : '#667eea',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem',
+                borderRadius: '0.375rem',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem'
+              }}
+            >
+              {copiedUrl === webhook.url ? (
+                <>
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+          
+          <div style={{
+            backgroundColor: '#f8fafc',
+            padding: '0.75rem',
+            borderRadius: '0.375rem',
+            border: '1px solid #e2e8f0',
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+            color: '#374151',
+            wordBreak: 'break-all',
+            marginBottom: '0.5rem'
+          }}>
+            {webhook.url}
+          </div>
+          
+          {webhook.description && (
+            <p style={{ 
+              color: '#6b7280', 
+              fontSize: '0.875rem',
+              margin: '0.5rem 0 0 0',
+              lineHeight: '1.4'
+            }}>
+              {webhook.description}
+            </p>
+          )}
+          
+          {webhook.expectedPayload && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <span style={{ 
+                color: '#9ca3af', 
+                fontSize: '0.75rem',
+                fontWeight: '500'
+              }}>
+                Expected Payload: 
+              </span>
+              <span style={{ 
+                color: '#6b7280', 
+                fontSize: '0.75rem',
+                marginLeft: '0.25rem'
+              }}>
+                {webhook.expectedPayload}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Insights Tab Component
+function InsightsTab({ llmAnalysis, workflow }) {
+  if (!llmAnalysis) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
+          AI insights not available. Upload the workflow again to get intelligent recommendations.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* AI Insights */}
+      {llmAnalysis.insights?.length > 0 && (
+        <div>
+          <h4 style={{ 
+            fontSize: '1rem', 
+            fontWeight: '600', 
+            color: '#111827', 
+            margin: '0 0 1rem 0' 
+          }}>
+            AI Insights
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {llmAnalysis.insights.map((insight, index) => (
+              <div
+                key={index}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.75rem',
+                  padding: '0.75rem',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #e2e8f0'
+                }}
+              >
+                <div style={{
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '1.5rem',
+                  height: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  flexShrink: 0
+                }}>
+                  {index + 1}
+                </div>
+                <p style={{ 
+                  color: '#374151', 
+                  fontSize: '0.875rem',
+                  margin: 0,
+                  lineHeight: '1.5'
+                }}>
+                  {insight}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* URL Patterns */}
+      {llmAnalysis.urlPatterns?.length > 0 && (
+        <div>
+          <h4 style={{ 
+            fontSize: '1rem', 
+            fontWeight: '600', 
+            color: '#111827', 
+            margin: '0 0 1rem 0' 
+          }}>
+            Recommended URL Patterns
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {llmAnalysis.urlPatterns.map((pattern, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: '0.75rem',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #e5e7eb'
+                }}
+              >
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  color: '#667eea',
+                  fontWeight: '600',
+                  marginBottom: '0.25rem'
+                }}>
+                  {pattern.pattern}
+                </div>
+                <p style={{ 
+                  color: '#6b7280', 
+                  fontSize: '0.75rem',
+                  margin: 0,
+                  lineHeight: '1.4'
+                }}>
+                  {pattern.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Analysis Metadata */}
+      <div style={{
+        marginTop: '1rem',
+        padding: '1rem',
+        backgroundColor: '#f9fafb',
+        borderRadius: '0.5rem',
+        border: '1px solid #e5e7eb'
+      }}>
+        <h4 style={{ 
+          fontSize: '0.875rem', 
+          fontWeight: '600', 
+          color: '#6b7280', 
+          margin: '0 0 0.5rem 0' 
+        }}>
+          Analysis Details
+        </h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+            Model: {llmAnalysis.llmModel || 'Standard Analysis'}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+            Generated: {llmAnalysis.generatedAt ? new Date(llmAnalysis.generatedAt).toLocaleString() : 'Unknown'}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+            Confidence: {llmAnalysis.confidence || 'Unknown'}
+          </div>
+          {llmAnalysis.fallback && (
+            <div style={{ fontSize: '0.75rem', color: '#f59e0b' }}>
+              ⚠️ Fallback analysis used (LLM unavailable)
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1855,6 +2417,109 @@ function CredentialsView({ user }) {
 }
 
 function SettingsView({ user }) {
+  const [n8nConfig, setN8nConfig] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    userId: '',
+    apiKey: ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load n8n configuration
+  useEffect(() => {
+    loadN8nConfig();
+  }, []);
+
+  const loadN8nConfig = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/users/n8n-config`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setN8nConfig(data.data.n8nConfig);
+        if (data.data.n8nConfig) {
+          setFormData({
+            userId: data.data.n8nConfig.userId || '',
+            apiKey: '' // Don't show API key for security
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading n8n config:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveN8nConfig = async () => {
+    if (!formData.userId || !formData.apiKey) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/users/n8n-config`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setN8nConfig(data.data.n8nConfig);
+        setIsEditing(false);
+        alert('n8n configuration saved successfully!');
+      } else {
+        alert(data.message || 'Failed to save n8n configuration');
+      }
+    } catch (error) {
+      console.error('Error saving n8n config:', error);
+      alert('Error saving n8n configuration');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteN8nConfig = async () => {
+    if (!confirm('Are you sure you want to remove n8n configuration?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/users/n8n-config`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setN8nConfig(null);
+        setFormData({ userId: '', apiKey: '' });
+        setIsEditing(false);
+        alert('n8n configuration removed successfully!');
+      }
+    } catch (error) {
+      console.error('Error deleting n8n config:', error);
+      alert('Error removing n8n configuration');
+    }
+  };
+
   return (
     <div style={{ padding: '2rem 0' }}>
       <h2 style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', margin: '0 0 1rem 0' }}>
@@ -1863,11 +2528,14 @@ function SettingsView({ user }) {
       <p style={{ color: '#6b7280', margin: '0 0 2rem 0' }}>
         Configure your account and application preferences.
       </p>
+
+      {/* Account Information */}
       <div style={{ 
         backgroundColor: 'white', 
         borderRadius: '0.75rem', 
         padding: '2rem', 
-        border: '1px solid #e5e7eb' 
+        border: '1px solid #e5e7eb',
+        marginBottom: '2rem'
       }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: '600', margin: '0 0 1rem 0' }}>
           Account Information
@@ -1884,6 +2552,182 @@ function SettingsView({ user }) {
           </label>
           <p style={{ color: '#6b7280', margin: 0 }}>{user?.email || 'Not set'}</p>
         </div>
+      </div>
+
+      {/* n8n Configuration */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '0.75rem', 
+        padding: '2rem', 
+        border: '1px solid #e5e7eb'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: '600', margin: 0 }}>
+            n8n Configuration
+          </h3>
+          {n8nConfig && !isEditing && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleDeleteN8nConfig}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+
+        <p style={{ color: '#6b7280', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+          Configure your n8n user credentials to enable automatic workflow deployment.
+        </p>
+
+        {isLoading ? (
+          <p style={{ color: '#6b7280' }}>Loading n8n configuration...</p>
+        ) : !n8nConfig && !isEditing ? (
+          <div>
+            <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+              No n8n configuration found. Add your n8n user credentials to enable automatic workflow deployment.
+            </p>
+            <button
+              onClick={() => setIsEditing(true)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                cursor: 'pointer'
+              }}
+            >
+              Add n8n Configuration
+            </button>
+          </div>
+        ) : isEditing ? (
+          <div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                User ID
+              </label>
+              <input
+                type="text"
+                value={formData.userId}
+                onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                placeholder="your-n8n-user-id"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem'
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                API Key
+              </label>
+              <input
+                type="password"
+                value={formData.apiKey}
+                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                placeholder="your-n8n-api-key"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={handleSaveN8nConfig}
+                disabled={isSaving}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: isSaving ? '#9ca3af' : '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: isSaving ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSaving ? 'Saving...' : 'Save Configuration'}
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                disabled={isSaving}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: isSaving ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                User ID
+              </label>
+              <p style={{ color: '#6b7280', margin: 0 }}>{n8nConfig.userId}</p>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                Status
+              </label>
+              <p style={{ 
+                color: n8nConfig.isConnected ? '#10b981' : '#ef4444', 
+                margin: 0, 
+                fontWeight: '500' 
+              }}>
+                {n8nConfig.isConnected ? '✅ Connected' : '❌ Disconnected'}
+              </p>
+            </div>
+            {n8nConfig.lastConnected && (
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                  Last Connected
+                </label>
+                <p style={{ color: '#6b7280', margin: 0 }}>
+                  {new Date(n8nConfig.lastConnected).toLocaleString()}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
