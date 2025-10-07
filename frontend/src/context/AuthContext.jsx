@@ -21,18 +21,30 @@ export const AuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       try {
         const token = localStorage.getItem('runcraft_token');
+        console.log('🔍 Checking authentication state...');
+        console.log('🔑 Token found:', !!token);
+        console.log('🔑 Token length:', token?.length || 0);
+        
         if (token) {
+          console.log('Found stored token, verifying...');
           // Verify token is still valid by getting current user
           const response = await apiService.getCurrentUser();
           if (response.status === 'success' && response.data.user) {
+            console.log('✅ Token is valid, user authenticated');
             setUser(response.data.user);
+          } else {
+            console.log('❌ Invalid response from getCurrentUser');
+            throw new Error('Invalid token response');
           }
+        } else {
+          console.log('📝 No stored token found');
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
-        // Clear invalid token
+        console.log('🚨 Authentication initialization failed:', error.message);
+        // Clear invalid token and user state
         localStorage.removeItem('runcraft_token');
         apiService.setToken(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -91,9 +103,24 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
-      setUser(null);
-      setCurrentView('signIn');
+      // Clear all auth data
+      clearSession();
     }
+  };
+
+  const clearSession = () => {
+    // Clear user state
+    setUser(null);
+    setCurrentView('signIn');
+    
+    // Clear all possible token storage keys
+    localStorage.removeItem('runcraft_token');
+    localStorage.removeItem('token'); // fallback key
+    
+    // Clear API service token
+    apiService.setToken(null);
+    
+    console.log('Session cleared completely');
   };
 
   const updateUser = async (userData) => {
@@ -122,6 +149,7 @@ export const AuthProvider = ({ children }) => {
     signIn,
     signUp,
     signOut,
+    clearSession,
     updateUser,
     isAuthenticated: !!user
   };
