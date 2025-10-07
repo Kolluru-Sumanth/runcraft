@@ -73,6 +73,90 @@ class WorkflowAnalysisService {
   }
 
   /**
+   * Check if credentials exist in n8n server
+   * @param {Array} credentialRequirements - Array of credential requirements
+   * @returns {Promise<Array>} Enhanced credential requirements with existence status
+   */
+  async checkCredentialsExistence(credentialRequirements) {
+    try {
+      if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
+        console.log('⚠️ n8n server configuration not found, marking all credentials as not configured');
+        return credentialRequirements.map(cred => ({ ...cred, isConfigured: false, exists: false }));
+      }
+
+      // Get all credentials from n8n server
+      const existingCredentials = await this.getAllCredentials();
+      
+      // Check each requirement against existing credentials
+      const enhancedRequirements = credentialRequirements.map(requirement => {
+        let isConfigured = false;
+        let exists = false;
+        let matchedCredential = null;
+
+        // Check if credential exists by ID first (most reliable)
+        if (requirement.n8nCredentialId) {
+          matchedCredential = existingCredentials.find(cred => cred.id === requirement.n8nCredentialId);
+          if (matchedCredential) {
+            isConfigured = true;
+            exists = true;
+          }
+        }
+
+        // If not found by ID, check by type and name
+        if (!matchedCredential) {
+          matchedCredential = existingCredentials.find(cred => 
+            cred.type === requirement.credentialType && 
+            cred.name === requirement.credentialName
+          );
+          if (matchedCredential) {
+            isConfigured = true;
+            exists = true;
+          }
+        }
+
+        return {
+          ...requirement,
+          isConfigured,
+          exists,
+          matchedCredentialId: matchedCredential?.id || null
+        };
+      });
+
+      return enhancedRequirements;
+    } catch (error) {
+      console.error('❌ Error checking credentials existence:', error.message);
+      // Return original requirements with isConfigured: false on error
+      return credentialRequirements.map(cred => ({ ...cred, isConfigured: false, exists: false }));
+    }
+  }
+
+  /**
+   * Get all credentials from n8n server
+   * @returns {Promise<Array>} Array of credentials
+   */
+  async getAllCredentials() {
+    try {
+      if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
+        throw new Error('n8n server configuration not found');
+      }
+
+      const response = await axios.get(`${this.n8nServerUrl}/api/v1/credentials`, {
+        headers: {
+          'X-N8N-API-KEY': this.n8nAdminApiKey,
+          'Content-Type': 'application/json'
+        },
+        timeout: this.timeout
+      });
+
+      console.log(`📋 Found ${response.data.data?.length || 0} credentials in n8n server`);
+      return response.data.data || [];
+    } catch (error) {
+      console.error('❌ Error fetching credentials from n8n:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Analyze a workflow to detect trigger information and generate URLs
    * @param {Object} workflowData - The n8n workflow JSON data
    * @param {string} n8nWorkflowId - The n8n workflow ID (if deployed)
@@ -303,19 +387,14 @@ class WorkflowAnalysisService {
         workflowData.name : 
         `${workflowData.name} (${uniqueId.substring(0, 8)})`;
 
-      // Prepare workflow for upload
+      // Prepare workflow for upload - only include properties that n8n accepts
       const workflowPayload = {
         name: workflowName,
-        nodes: workflowData.nodes,
-        connections: workflowData.connections,
-        active: false, // Start inactive
+        nodes: workflowData.nodes || [],
+        connections: workflowData.connections || {},
         settings: workflowData.settings || {},
-        staticData: workflowData.staticData || {},
-        meta: {
-          uploadedBy: userId,
-          uploadedAt: new Date().toISOString(),
-          source: 'runcraft'
-        }
+        staticData: workflowData.staticData || {}
+        // Note: Removed 'active' and 'meta' properties as n8n API doesn't accept them during creation
       };
 
       console.log(`📤 Uploading workflow "${workflowName}" to n8n...`);

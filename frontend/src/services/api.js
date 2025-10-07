@@ -53,9 +53,8 @@ class ApiService {
       if (!response.ok) {
         // Handle specific error cases
         if (response.status === 401) {
-          // Unauthorized - clear token and redirect to login
+          // Unauthorized - clear token but don't reload
           this.setToken(null);
-          window.location.reload();
           throw new Error('Session expired. Please log in again.');
         }
         
