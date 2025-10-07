@@ -149,6 +149,146 @@ router.delete('/account', async (req, res) => {
   }
 });
 
+// @desc    Update n8n configuration
+// @route   PUT /api/users/n8n-config
+// @access  Private
+router.put('/n8n-config', async (req, res) => {
+  try {
+    const { userId, apiKey } = req.body;
+
+    if (!userId || !apiKey) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User ID and API key are required'
+      });
+    }
+
+    // Use server URL from environment variables for security
+    const serverUrl = process.env.N8N_SERVER_URL;
+    
+    if (!serverUrl) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'n8n server configuration not available'
+      });
+    }
+
+    // Test n8n connection before saving
+    const axios = require('axios');
+    try {
+      const testResponse = await axios.get(`${serverUrl}/api/v1/workflows`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'X-N8N-API-KEY': apiKey
+        }
+      });
+      
+      console.log('✅ n8n connection test successful for user:', userId);
+    } catch (testError) {
+      console.error('❌ n8n connection test failed:', testError.message);
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Failed to connect to n8n. Please check your credentials.',
+        error: testError.response?.data?.message || testError.message
+      });
+    }
+
+    // Update user with n8n configuration (serverUrl from env)
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        n8nConfig: {
+          serverUrl, // From environment variable
+          userId,
+          apiKey,
+          isConnected: true,
+          lastConnected: new Date()
+        }
+      },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'n8n configuration updated successfully',
+      data: {
+        n8nConfig: {
+          userId: user.n8nConfig.userId,
+          isConnected: user.n8nConfig.isConnected,
+          lastConnected: user.n8nConfig.lastConnected
+          // Note: serverUrl and apiKey not exposed for security
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Update n8n config error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error updating n8n configuration'
+    });
+  }
+});
+
+// @desc    Get n8n configuration
+// @route   GET /api/users/n8n-config
+// @access  Private
+router.get('/n8n-config', async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user.n8nConfig) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          n8nConfig: null
+        }
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        n8nConfig: {
+          userId: user.n8nConfig.userId,
+          isConnected: user.n8nConfig.isConnected,
+          lastConnected: user.n8nConfig.lastConnected
+          // Note: serverUrl and apiKey not exposed for security
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get n8n config error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching n8n configuration'
+    });
+  }
+});
+
+// @desc    Delete n8n configuration
+// @route   DELETE /api/users/n8n-config
+// @access  Private
+router.delete('/n8n-config', async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $unset: { n8nConfig: 1 } },
+      { new: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'n8n configuration removed successfully'
+    });
+  } catch (error) {
+    console.error('Delete n8n config error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error removing n8n configuration'
+    });
+  }
+});
+
 // Admin only routes
 // @desc    Get all users
 // @route   GET /api/users

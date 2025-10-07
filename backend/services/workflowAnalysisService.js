@@ -1,10 +1,49 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
 class WorkflowAnalysisService {
   constructor() {
     this.n8nServerUrl = process.env.N8N_SERVER_URL;
     this.n8nAdminApiKey = process.env.N8N_ADMIN_API_KEY;
     this.timeout = 30000; // 30 seconds timeout
+  }
+
+  /**
+   * Generate a unique workflow ID using crypto
+   * @returns {string} Unique workflow ID
+   */
+  generateUniqueWorkflowId() {
+    return crypto.randomUUID();
+  }
+
+  /**
+   * Validate workflow structure
+   * @param {Object} workflowData - The n8n workflow JSON data
+   * @returns {Object} Validation result
+   */
+  validateWorkflowStructure(workflowData) {
+    const errors = [];
+    
+    if (!workflowData) {
+      errors.push('Workflow data is required');
+    }
+    
+    if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
+      errors.push('Workflow must contain a valid nodes array');
+    }
+    
+    if (!workflowData.name || typeof workflowData.name !== 'string') {
+      errors.push('Workflow must have a valid name');
+    }
+    
+    if (workflowData.nodes && workflowData.nodes.length === 0) {
+      errors.push('Workflow must contain at least one node');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 
   /**
@@ -46,14 +85,14 @@ class WorkflowAnalysisService {
     for (const node of workflowData.nodes || []) {
       const nodeType = node.type || '';
       const nodeParameters = node.parameters || {};
-      const webhookId = node.webhookId;
+      const webhookId = node.webhookId || n8nWorkflowId;
       
-      // Detect different trigger types
+      // Detect different trigger types and pass workflow ID for URL generation
       if (this.isWebhookTrigger(node)) {
-        const triggerInfo = this.analyzeWebhookTrigger(node, baseUrl);
+        const triggerInfo = this.analyzeWebhookTrigger(node, baseUrl, n8nWorkflowId);
         triggers.push(triggerInfo);
       } else if (this.isChatTrigger(node)) {
-        const triggerInfo = this.analyzeChatTrigger(node, baseUrl);
+        const triggerInfo = this.analyzeChatTrigger(node, baseUrl, n8nWorkflowId);
         triggers.push(triggerInfo);
       } else if (this.isScheduleTrigger(node)) {
         const triggerInfo = this.analyzeScheduleTrigger(node);
@@ -109,60 +148,86 @@ class WorkflowAnalysisService {
   }
 
   /**
-   * Analyze webhook trigger node
+   * Generate comprehensive webhook URLs including test and production variants
+   * @param {string} workflowId - The workflow ID or webhook ID
+   * @param {string} baseUrl - The n8n server base URL
+   * @param {Object} node - The webhook node
+   * @returns {Object} Webhook URL information
    */
-  analyzeWebhookTrigger(node, baseUrl) {
-    const webhookId = node.webhookId;
+  generateWebhookUrls(workflowId, baseUrl, node = null) {
+    if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+    }
+
+    const urls = {
+      production: `${baseUrl}webhook/${workflowId}`,
+      test: `${baseUrl}webhook-test/${workflowId}`,
+      chat: null
+    };
+
+    // Add path if specified
+    if (node?.parameters?.path) {
+      urls.production += `/${node.parameters.path}`;
+      urls.test += `/${node.parameters.path}`;
+    }
+
+    // Check if this is a chat trigger
+    if (this.isChatTrigger(node)) {
+      urls.chat = `${baseUrl}webhook/${workflowId}/chat`;
+    }
+
+    return urls;
+  }
+
+  /**
+   * Analyze webhook trigger node with comprehensive URL generation
+   */
+  analyzeWebhookTrigger(node, baseUrl, workflowId = null) {
+    const webhookId = node.webhookId || workflowId;
     const path = node.parameters?.path || '';
     
-    let webhookUrl = null;
-    if (webhookId) {
-      webhookUrl = `${baseUrl}webhook/${webhookId}`;
-      if (path) {
-        webhookUrl += `/${path}`;
-      }
-    }
+    // Generate all webhook URL variants
+    const webhookUrls = this.generateWebhookUrls(webhookId, baseUrl, node);
 
     return {
       type: 'webhook',
       nodeId: node.id,
       nodeName: node.name,
       webhookId,
-      webhookUrl,
+      webhookUrl: webhookUrls.production,
+      testUrl: webhookUrls.test,
       communicationMethod: 'HTTP POST requests to webhook URL',
-      details: webhookUrl ? 
-        `Send HTTP requests to: ${webhookUrl}` : 
-        'Webhook URL will be generated after deployment',
+      details: webhookUrls.production ? 
+        `Production: ${webhookUrls.production}\nTest: ${webhookUrls.test}` : 
+        'Webhook URLs will be generated after deployment',
       httpMethods: node.parameters?.httpMethod || ['POST'],
-      path: path || null
+      path: path || null,
+      urls: webhookUrls
     };
   }
 
   /**
-   * Analyze chat trigger node
+   * Analyze chat trigger node with comprehensive URL generation
    */
-  analyzeChatTrigger(node, baseUrl) {
-    const webhookId = node.webhookId;
+  analyzeChatTrigger(node, baseUrl, workflowId = null) {
+    const webhookId = node.webhookId || workflowId;
     
-    let chatUrl = null;
-    let webhookUrl = null;
-    
-    if (webhookId) {
-      chatUrl = `${baseUrl}webhook/${webhookId}/chat`;
-      webhookUrl = `${baseUrl}webhook/${webhookId}`;
-    }
+    // Generate all webhook URL variants
+    const webhookUrls = this.generateWebhookUrls(webhookId, baseUrl, node);
 
     return {
       type: 'chat',
       nodeId: node.id,
       nodeName: node.name,
       webhookId,
-      webhookUrl,
-      chatUrl,
-      communicationMethod: 'Chat interface',
-      details: chatUrl ? 
-        `Chat interface available at: ${chatUrl}` : 
-        'Chat URL will be generated after deployment'
+      webhookUrl: webhookUrls.production,
+      chatUrl: webhookUrls.chat,
+      testUrl: webhookUrls.test,
+      communicationMethod: 'Chat interface and HTTP requests',
+      details: webhookUrls.chat ? 
+        `Chat: ${webhookUrls.chat}\nWebhook: ${webhookUrls.production}\nTest: ${webhookUrls.test}` : 
+        'Chat and webhook URLs will be generated after deployment',
+      urls: webhookUrls
     };
   }
 
@@ -205,7 +270,7 @@ class WorkflowAnalysisService {
   }
 
   /**
-   * Upload workflow to n8n server
+   * Upload workflow to n8n server with enhanced validation
    * @param {Object} workflowData - The workflow data to upload
    * @param {string} userId - The user's n8n user ID
    * @returns {Promise<Object>} Upload result
@@ -216,21 +281,44 @@ class WorkflowAnalysisService {
         throw new Error('n8n server configuration not found');
       }
 
+      // Validate workflow structure first
+      const validation = this.validateWorkflowStructure(workflowData);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: `Workflow validation failed: ${validation.errors.join(', ')}`,
+          statusCode: 400
+        };
+      }
+
       const headers = {
         'X-N8N-API-KEY': this.n8nAdminApiKey,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       };
 
+      // Generate unique workflow name if needed
+      const uniqueId = this.generateUniqueWorkflowId();
+      const workflowName = workflowData.name.includes('(') ? 
+        workflowData.name : 
+        `${workflowData.name} (${uniqueId.substring(0, 8)})`;
+
       // Prepare workflow for upload
       const workflowPayload = {
-        name: workflowData.name,
+        name: workflowName,
         nodes: workflowData.nodes,
         connections: workflowData.connections,
         active: false, // Start inactive
         settings: workflowData.settings || {},
-        staticData: workflowData.staticData || {}
+        staticData: workflowData.staticData || {},
+        meta: {
+          uploadedBy: userId,
+          uploadedAt: new Date().toISOString(),
+          source: 'runcraft'
+        }
       };
+
+      console.log(`📤 Uploading workflow "${workflowName}" to n8n...`);
 
       const response = await axios.post(
         `${this.n8nServerUrl}/api/v1/workflows`,
@@ -238,14 +326,17 @@ class WorkflowAnalysisService {
         { headers, timeout: this.timeout }
       );
 
+      console.log(`✅ Workflow uploaded successfully with ID: ${response.data.id}`);
+
       return {
         success: true,
         data: response.data,
-        workflowId: response.data.id
+        workflowId: response.data.id,
+        workflowName: workflowName
       };
 
     } catch (error) {
-      console.error('Error uploading workflow to n8n:', error.response?.data || error.message);
+      console.error('❌ Error uploading workflow to n8n:', error.response?.data || error.message);
       
       return {
         success: false,
@@ -399,6 +490,111 @@ class WorkflowAnalysisService {
 
     } catch (error) {
       console.error('Error getting workflow from n8n:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        statusCode: error.response?.status
+      };
+    }
+  }
+
+  /**
+   * Check if workflow is ready for activation (all credentials configured)
+   * @param {Object} workflow - The workflow document
+   * @returns {boolean} Whether workflow is ready for activation
+   */
+  isWorkflowReadyForActivation(workflow) {
+    if (!workflow.n8nWorkflowId) {
+      return false;
+    }
+
+    const unconfiguredCredentials = workflow.credentialRequirements.filter(c => !c.isConfigured);
+    return unconfiguredCredentials.length === 0;
+  }
+
+  /**
+   * Auto-activate workflow if all credentials are configured
+   * @param {Object} workflow - The workflow document
+   * @returns {Promise<Object>} Activation result
+   */
+  async autoActivateWorkflowIfReady(workflow) {
+    try {
+      if (!this.isWorkflowReadyForActivation(workflow)) {
+        return {
+          success: false,
+          message: 'Workflow not ready for activation - missing credentials or not deployed',
+          shouldActivate: false
+        };
+      }
+
+      console.log(`🚀 Auto-activating workflow ${workflow.name} (ID: ${workflow.n8nWorkflowId})...`);
+      
+      const activateResult = await this.activateWorkflow(workflow.n8nWorkflowId);
+      
+      if (activateResult.success) {
+        console.log(`✅ Workflow ${workflow.name} activated successfully`);
+        return {
+          success: true,
+          message: 'Workflow activated automatically',
+          shouldActivate: true,
+          data: activateResult.data
+        };
+      } else {
+        console.error(`❌ Failed to auto-activate workflow ${workflow.name}:`, activateResult.error);
+        return {
+          success: false,
+          message: `Auto-activation failed: ${activateResult.error}`,
+          shouldActivate: true,
+          error: activateResult.error
+        };
+      }
+
+    } catch (error) {
+      console.error('Error in auto-activation:', error.message);
+      return {
+        success: false,
+        message: `Auto-activation error: ${error.message}`,
+        shouldActivate: true,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get workflow details including trigger URLs after activation
+   * @param {string} workflowId - The n8n workflow ID
+   * @returns {Promise<Object>} Workflow details with trigger URLs
+   */
+  async getWorkflowWithTriggerUrls(workflowId) {
+    try {
+      if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
+        throw new Error('n8n server configuration not found');
+      }
+
+      const headers = {
+        'X-N8N-API-KEY': this.n8nAdminApiKey,
+        'Accept': 'application/json'
+      };
+
+      const response = await axios.get(
+        `${this.n8nServerUrl}/api/v1/workflows/${workflowId}`,
+        { headers, timeout: this.timeout }
+      );
+
+      const workflowData = response.data;
+      
+      // Analyze triggers with the actual workflow ID
+      const triggerInfo = this.analyzeTriggers(workflowData, workflowId);
+
+      return {
+        success: true,
+        data: workflowData,
+        triggerInfo
+      };
+
+    } catch (error) {
+      console.error('Error getting workflow details:', error.response?.data || error.message);
       
       return {
         success: false,
