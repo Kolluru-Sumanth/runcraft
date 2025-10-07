@@ -85,7 +85,13 @@ class WorkflowAnalysisService {
       }
 
       // Get all credentials from n8n server
-      const existingCredentials = await this.getAllCredentials();
+      let existingCredentials = [];
+      try {
+        existingCredentials = await this.getAllCredentials();
+      } catch (error) {
+        console.log('⚠️ Could not fetch credentials from n8n server, assuming none exist');
+        return credentialRequirements.map(cred => ({ ...cred, isConfigured: false, exists: false }));
+      }
       
       // Check each requirement against existing credentials
       const enhancedRequirements = credentialRequirements.map(requirement => {
@@ -140,6 +146,7 @@ class WorkflowAnalysisService {
         throw new Error('n8n server configuration not found');
       }
 
+      console.log(`🔍 Fetching credentials from: ${this.n8nServerUrl}/api/v1/credentials`);
       const response = await axios.get(`${this.n8nServerUrl}/api/v1/credentials`, {
         headers: {
           'X-N8N-API-KEY': this.n8nAdminApiKey,
@@ -151,7 +158,11 @@ class WorkflowAnalysisService {
       console.log(`📋 Found ${response.data.data?.length || 0} credentials in n8n server`);
       return response.data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching credentials from n8n:', error.response?.data || error.message);
+      if (error.response?.status === 405) {
+        console.log('⚠️ n8n credentials endpoint does not support GET method, assuming no credentials exist');
+        return [];
+      }
+      console.error('❌ Error fetching credentials from n8n:', error.response?.data || { message: error.message });
       throw error;
     }
   }
@@ -518,6 +529,8 @@ class WorkflowAnalysisService {
         'Accept': 'application/json'
       };
 
+      console.log('🔍 Attempting credential creation with data:', credentialData);
+
       const response = await axios.post(
         `${this.n8nServerUrl}/api/v1/credentials`,
         credentialData,
@@ -532,6 +545,26 @@ class WorkflowAnalysisService {
 
     } catch (error) {
       console.error('Error creating credential:', error.response?.data || error.message);
+      
+      // If it's a schema validation error, try to get more details
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('schema')) {
+        console.log('🔍 Schema validation failed, checking available credential types...');
+        try {
+          const typesResponse = await axios.get(
+            `${this.n8nServerUrl}/api/v1/credential-types`,
+            { 
+              headers: {
+                'X-N8N-API-KEY': this.n8nAdminApiKey,
+                'Accept': 'application/json'
+              }, 
+              timeout: this.timeout 
+            }
+          );
+          console.log('📋 Available credential types:', typesResponse.data);
+        } catch (typesError) {
+          console.log('⚠️ Could not fetch credential types:', typesError.message);
+        }
+      }
       
       return {
         success: false,
@@ -681,6 +714,132 @@ class WorkflowAnalysisService {
         statusCode: error.response?.status
       };
     }
+  }
+
+  /**
+   * Assign credentials to workflow nodes and update the workflow in n8n
+   * @param {string} workflowId - The n8n workflow ID
+   * @param {Array} credentialMappings - Array of {credentialId, nodeName, nodeId}
+   * @returns {Promise<Object>} Update result
+   */
+  async assignCredentialsToWorkflow(workflowId, credentialMappings) {
+    try {
+      if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
+        throw new Error('n8n server configuration not found');
+      }
+
+      console.log(`🔗 Assigning credentials to workflow ${workflowId}...`);
+
+      // First, get the current workflow
+      const workflowResult = await this.getWorkflowFromN8n(workflowId);
+      if (!workflowResult.success) {
+        throw new Error(`Failed to get workflow: ${workflowResult.error}`);
+      }
+
+      const workflowData = workflowResult.data;
+      console.log(`📥 Retrieved workflow data for credential assignment`);
+
+      // Update nodes with credential assignments
+      let credentialsAssigned = 0;
+      
+      if (workflowData.nodes) {
+        for (const node of workflowData.nodes) {
+          const mapping = credentialMappings.find(m => 
+            m.nodeName === node.name || m.nodeId === node.id
+          );
+          
+          if (mapping) {
+            console.log(`🔗 Assigning credential ${mapping.credentialId} to node ${node.name}`);
+            
+            // Assign credential to the node using n8n API format
+            if (!node.credentials) {
+              node.credentials = {};
+            }
+            
+            // Find the credential type for this node
+            const credentialType = mapping.credentialType || this.getNodeCredentialType(node.type);
+            if (credentialType) {
+              // Use the format from n8n API documentation
+              node.credentials[credentialType] = {
+                id: mapping.credentialId,
+                name: mapping.credentialName || `credential_${mapping.credentialId}`
+              };
+              credentialsAssigned++;
+              console.log(`✅ Credential assigned to ${node.name} (${credentialType})`);
+            }
+          }
+        }
+      }
+
+      if (credentialsAssigned === 0) {
+        console.log(`⚠️ No credentials were assigned to workflow nodes`);
+        return {
+          success: true,
+          credentialsAssigned: 0,
+          message: 'No matching nodes found for credential assignment'
+        };
+      }
+
+      // Update the workflow in n8n using the format from API docs
+      const headers = {
+        'X-N8N-API-KEY': this.n8nAdminApiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      // Prepare the update payload in the format n8n expects
+      const updatePayload = {
+        name: workflowData.name,
+        nodes: workflowData.nodes,
+        connections: workflowData.connections,
+        settings: workflowData.settings || {},
+        staticData: workflowData.staticData || {}
+      };
+
+      const response = await axios.put(
+        `${this.n8nServerUrl}/api/v1/workflows/${workflowId}`,
+        updatePayload,
+        { headers, timeout: this.timeout }
+      );
+
+      console.log(`✅ Workflow updated successfully with ${credentialsAssigned} credential assignments`);
+
+      return {
+        success: true,
+        data: response.data,
+        credentialsAssigned,
+        workflowId: workflowId
+      };
+
+    } catch (error) {
+      console.error('Error assigning credentials to workflow:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        statusCode: error.response?.status
+      };
+    }
+  }
+
+  /**
+   * Get the credential type for a specific node type
+   * @param {string} nodeType - The n8n node type
+   * @returns {string} The credential type
+   */
+  getNodeCredentialType(nodeType) {
+    const credentialTypeMap = {
+      'n8n-nodes-base.openAi': 'openAiApi',
+      'n8n-nodes-base.discord': 'discordApi',
+      'n8n-nodes-base.telegram': 'telegramApi',
+      'n8n-nodes-base.notion': 'notionApi',
+      'n8n-nodes-base.airtable': 'airtableTokenApi',
+      'n8n-nodes-base.httpRequest': 'httpBasicAuth',
+      'n8n-nodes-base.webhook': null, // Webhooks don't need credentials
+      // Add more mappings as needed
+    };
+
+    return credentialTypeMap[nodeType] || null;
   }
 }
 

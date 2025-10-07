@@ -181,87 +181,87 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
     // Add to deployment history
     await workflow.addDeploymentHistory('uploaded', 'Workflow uploaded and analyzed');
 
-    // Automatically deploy to n8n using our server credentials (only if all credentials are configured)
+    // Always deploy to n8n, but only activate if credentials are complete
     let deploymentResult = null;
     
-    if (unconfiguredCredentials.length === 0) {
-      console.log('🚀 All credentials configured - attempting auto-deployment to n8n using server credentials...');
-      
-      try {
-        console.log('📤 Calling workflowAnalysisService.uploadWorkflowToN8n...');
-        const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
-          workflow.workflowData,
-          `user_${req.user._id}` // Use user ID as identifier
+    console.log('🚀 Attempting deployment to n8n server...');
+    
+    try {
+      console.log('📤 Calling workflowAnalysisService.uploadWorkflowToN8n...');
+      const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
+        workflow.workflowData,
+        `user_${req.user._id}` // Use user ID as identifier
+      );
+
+      console.log('📥 Deploy result received:', deployResult);
+
+      if (deployResult.success) {
+        console.log('✅ Deployment to n8n successful!');
+        
+        // Update workflow with n8n ID and status
+        workflow.n8nWorkflowId = deployResult.workflowId;
+        workflow.status = 'deployed';
+        workflow.lastDeployment = new Date();
+
+        // Only auto-activate if ALL credentials are configured
+        const shouldActivate = unconfiguredCredentials.length === 0;
+        
+        if (shouldActivate) {
+          console.log('� All credentials configured - attempting auto-activation...');
+          const activationResult = await workflowAnalysisService.activateWorkflow(deployResult.workflowId);
+          if (activationResult.success) {
+            workflow.status = 'active';
+            console.log('✅ Workflow auto-activated successfully!');
+            await workflow.addDeploymentHistory('activated', 'Workflow auto-activated');
+          } else {
+            console.log('⚠️ Auto-activation failed:', activationResult.error);
+          }
+        } else {
+          console.log('⏸️ Workflow deployed but not activated - missing credentials:');
+          unconfiguredCredentials.forEach(cred => {
+            console.log(`  - ${cred.nodeName} requires ${cred.credentialType} credential`);
+          });
+          workflow.status = 'credentials_pending';
+        }
+
+        // Update trigger URLs with the actual n8n workflow ID
+        workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
+          workflow.workflowData, 
+          deployResult.workflowId
         );
 
-        console.log('📥 Deploy result received:', deployResult);
-
-        if (deployResult.success) {
-          console.log('✅ Auto-deployment to n8n successful!');
-          
-          // Update workflow with n8n ID and status
-          workflow.n8nWorkflowId = deployResult.workflowId;
-          workflow.status = 'deployed';
-          workflow.lastDeployment = new Date();
-
-          // Try to auto-activate workflow if no credentials are required
-          if (credentialRequirements.length === 0) {
-            console.log('🔄 No credentials required - attempting auto-activation...');
-            const activationResult = await workflowAnalysisService.activateWorkflow(deployResult.workflowId);
-            if (activationResult.success) {
-              workflow.status = 'active';
-              console.log('✅ Workflow auto-activated successfully!');
-              await workflow.addDeploymentHistory('activated', 'Workflow auto-activated');
-            } else {
-              console.log('⚠️ Auto-activation failed:', activationResult.error);
-            }
-          }
-
-          // Update trigger URLs with the actual n8n workflow ID
-          workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
-            workflow.workflowData, 
-            deployResult.workflowId
-          );
-
-          await workflow.save();
-          await workflow.addDeploymentHistory('deployed', `Auto-deployed with ID: ${deployResult.workflowId}`);
-          
-          deploymentResult = {
-            deployed: true,
-            workflowId: deployResult.workflowId,
-            activated: workflow.status === 'active',
-            triggerInfo: workflow.triggerInfo
-          };
-          
-          console.log('📍 Updated trigger URLs:', workflow.triggerInfo);
-        } else {
-          console.error('❌ Auto-deployment failed:', deployResult.error);
-          deploymentResult = {
-            deployed: false,
-            error: deployResult.error
-          };
-        }
-      } catch (deployError) {
-        console.error('❌ Auto-deployment error:', deployError.message);
-        console.error('❌ Full error:', deployError);
+        await workflow.save();
+        await workflow.addDeploymentHistory('deployed', `Deployed with ID: ${deployResult.workflowId}`);
+        
+        deploymentResult = {
+          deployed: true,
+          workflowId: deployResult.workflowId,
+          activated: workflow.status === 'active',
+          triggerInfo: workflow.triggerInfo,
+          needsCredentials: unconfiguredCredentials.length > 0,
+          missingCredentials: unconfiguredCredentials.map(cred => ({
+            nodeName: cred.nodeName,
+            credentialType: cred.credentialType,
+            credentialName: cred.credentialName
+          }))
+        };
+        
+        console.log('📍 Updated trigger URLs:', workflow.triggerInfo);
+      } else {
+        console.error('❌ Deployment failed:', deployResult.error);
+        workflow.status = 'upload_failed';
         deploymentResult = {
           deployed: false,
-          error: deployError.message
+          error: deployResult.error
         };
       }
-    } else {
-      console.log('⏸️ Skipping auto-deployment - missing credentials detected:');
-      unconfiguredCredentials.forEach(cred => {
-        console.log(`  - ${cred.nodeName} requires ${cred.credentialType} credential`);
-      });
+    } catch (deployError) {
+      console.error('❌ Deployment error:', deployError.message);
+      console.error('❌ Full error:', deployError);
+      workflow.status = 'upload_failed';
       deploymentResult = {
         deployed: false,
-        reason: 'credentials_missing',
-        missingCredentials: unconfiguredCredentials.map(cred => ({
-          nodeName: cred.nodeName,
-          credentialType: cred.credentialType,
-          credentialName: cred.credentialName
-        }))
+        error: deployError.message
       };
     }
 
@@ -603,13 +603,30 @@ router.post('/:id/credentials', protect, async (req, res) => {
         }
 
         // Create credential in n8n
-        const credentialPayload = {
+        let credentialPayload = {
           name,
           type,
           data
         };
 
+        // Special handling for OpenAI credentials - n8n expects both apiKey and header format
+        if (type === 'openAiApi') {
+          if (data.apiKey) {
+            // Provide both formats as required by n8n's allOf schema
+            credentialPayload = {
+              name,
+              type: 'openAiApi',
+              data: {
+                apiKey: data.apiKey,
+                headerName: 'Authorization',
+                headerValue: `Bearer ${data.apiKey}`
+              }
+            };
+          }
+        }
+
         console.log(`🔑 Creating credential "${name}" of type "${type}"...`);
+        console.log(`📝 Credential data being sent:`, credentialPayload);
         const createResult = await workflowAnalysisService.createCredential(credentialPayload);
 
         if (createResult.success) {
@@ -627,6 +644,53 @@ router.post('/:id/credentials', protect, async (req, res) => {
       } catch (credError) {
         errors.push(`Error processing credential: ${credError.message}`);
         console.error(`❌ Error processing credential:`, credError);
+      }
+    }
+
+    // If we have successful credential creations and the workflow is deployed, assign them
+    const successfulCredentials = results.filter(r => r.success);
+    if (successfulCredentials.length > 0 && workflow.n8nWorkflowId) {
+      console.log(`🔗 Assigning ${successfulCredentials.length} credentials to workflow ${workflow.n8nWorkflowId}...`);
+      
+      try {
+        // Create credential mappings
+        const credentialMappings = [];
+        
+        for (const result of successfulCredentials) {
+          // Find the corresponding credential requirement to get node info
+          const credReq = workflow.credentialRequirements.find(req => 
+            req.credentialType === result.type
+          );
+          
+          if (credReq) {
+            credentialMappings.push({
+              credentialId: result.credentialId,
+              credentialType: result.type,
+              credentialName: result.name,
+              nodeName: credReq.nodeName,
+              nodeId: credReq.nodeId || null
+            });
+          }
+        }
+
+        if (credentialMappings.length > 0) {
+          const assignResult = await workflowAnalysisService.assignCredentialsToWorkflow(
+            workflow.n8nWorkflowId,
+            credentialMappings
+          );
+
+          if (assignResult.success) {
+            console.log(`✅ Successfully assigned ${assignResult.credentialsAssigned} credentials to workflow`);
+            await workflow.addDeploymentHistory('updated', 
+              `Assigned ${assignResult.credentialsAssigned} credentials to workflow`);
+          } else {
+            console.error(`❌ Failed to assign credentials to workflow: ${assignResult.error}`);
+            errors.push(`Failed to assign credentials to workflow: ${assignResult.error}`);
+          }
+        }
+      } catch (assignError) {
+        console.error(`❌ Error assigning credentials to workflow:`, assignError);
+        errors.push(`Error assigning credentials to workflow: ${assignError.message}`);
       }
     }
 

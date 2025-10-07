@@ -10,6 +10,9 @@ function UploadPanel({ onFileUpload, user, workflow }) {
   const [isSubmittingCredentials, setIsSubmittingCredentials] = useState(false);
 
   const showMissingCredentialsModal = (missing, workflowData) => {
+    console.log('🔧 Debug: showMissingCredentialsModal called with:', { missing, workflowData });
+    console.log('🔧 Debug: workflowData.workflowId:', workflowData?.workflowId);
+    
     setMissingCredentials(missing);
     setCurrentWorkflow(workflowData);
     // Initialize credential inputs
@@ -57,6 +60,9 @@ function UploadPanel({ onFileUpload, user, workflow }) {
       'airtableTokenApi': {
         apiKey: ''
       },
+      'openAiApi': {
+        apiKey: ''
+      },
       'httpBasicAuth': {
         user: '',
         password: ''
@@ -68,9 +74,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
     };
 
     return commonFields[credentialType] || {
-      apiKey: '',
-      username: '',
-      password: ''
+      apiKey: ''
     };
   };
 
@@ -99,6 +103,22 @@ function UploadPanel({ onFileUpload, user, workflow }) {
     try {
       const token = localStorage.getItem('runcraft_token');
       const backendURL = import.meta.env.DEV ? 'http://localhost:5000/api' : '/api';
+      
+      // Debug: Check workflowId
+      console.log('🔧 Debug: currentWorkflow:', currentWorkflow);
+      console.log('🔧 Debug: workflowId:', currentWorkflow?.workflowId);
+      
+      if (!currentWorkflow?.workflowId) {
+        // Fallback: try to use workflow prop if currentWorkflow is missing ID
+        console.log('🔧 Debug: currentWorkflow missing ID, checking workflow prop:', workflow);
+        const workflowId = currentWorkflow?.workflowId || workflow?.workflowId;
+        if (!workflowId) {
+          throw new Error('Workflow ID is missing. Please re-upload the workflow.');
+        }
+        // Update currentWorkflow with the ID
+        const updatedWorkflow = { ...currentWorkflow, workflowId };
+        setCurrentWorkflow(updatedWorkflow);
+      }
       
       // Submit credentials to backend
       const credentialsToSubmit = Object.values(credentialInputs).map(input => ({
@@ -202,6 +222,8 @@ function UploadPanel({ onFileUpload, user, workflow }) {
       }
 
       const result = await response.json();
+      console.log('🔧 Debug: Upload response result:', result);
+      console.log('🔧 Debug: result.data.workflow._id:', result.data?.workflow?._id);
       
       // Extract workflow data and LLM analysis
       const workflowWithAnalysis = {
@@ -213,11 +235,14 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         missingCredentials: result.data.missingCredentials,
         needsMissingCredentials: result.data.needsMissingCredentials,
         triggerInfo: result.data.triggerInfo,
-        workflowId: result.data.workflow._id,
+        workflowId: result.data.workflow.id,  // This is the MongoDB ObjectId from summary
         status: result.data.workflow.status,
         uploadedAt: new Date().toISOString(),
         deployment: result.data.deployment
       };
+
+      console.log('🔧 Debug: workflowWithAnalysis:', workflowWithAnalysis);
+      console.log('🔧 Debug: workflowWithAnalysis.workflowId:', workflowWithAnalysis.workflowId);
 
       onFileUpload(workflowWithAnalysis);
       
