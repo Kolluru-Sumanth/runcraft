@@ -213,6 +213,38 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
             workflow.status = 'active';
             console.log('✅ Workflow auto-activated successfully!');
             await workflow.addDeploymentHistory('activated', 'Workflow auto-activated');
+            
+            // Get live webhook URLs from the activated workflow
+            console.log('🔗 Retrieving live webhook URLs from activated workflow...');
+            try {
+              const webhookResult = await workflowAnalysisService.getWorkflowWebhookUrls(deployResult.workflowId);
+              
+              if (webhookResult.success && webhookResult.webhookUrls.length > 0) {
+                console.log(`🔗 Found ${webhookResult.webhookUrls.length} live webhook URLs`);
+                
+                // Update workflow with live webhook URLs  
+                const liveWebhookTriggers = webhookResult.webhookUrls.map(webhook => ({
+                  type: 'webhook',
+                  nodeId: webhook.nodeId,
+                  nodeName: webhook.nodeName,
+                  webhookUrl: webhook.webhookUrl,
+                  testUrl: webhook.testUrl,
+                  method: webhook.method,
+                  active: webhook.active,
+                  communicationMethod: 'HTTP POST requests to webhook URL',
+                  details: `Production: ${webhook.webhookUrl}\nTest: ${webhook.testUrl}`
+                }));
+                
+                // Merge with existing trigger info, avoiding duplicates
+                workflow.triggerInfo = workflow.triggerInfo.concat(liveWebhookTriggers);
+                
+                console.log('📍 Updated with live webhook URLs from n8n');
+              }
+            } catch (webhookError) {
+              console.error('⚠️ Failed to retrieve webhook URLs:', webhookError.message);
+              // Don't fail the whole process, just log the error
+            }
+            
           } else {
             console.log('⚠️ Auto-activation failed:', activationResult.error);
           }
@@ -450,63 +482,6 @@ router.post('/:id/deploy', protect, async (req, res) => {
   }
 });
 
-// @desc    Activate workflow in n8n
-// @route   POST /api/workflows/:id/activate
-// @access  Private
-router.post('/:id/activate', protect, async (req, res) => {
-  try {
-    const workflow = await Workflow.findOne({ 
-      _id: req.params.id, 
-      userId: req.user._id 
-    });
-
-    if (!workflow) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'Workflow not found'
-      });
-    }
-
-    if (!workflow.n8nWorkflowId) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Workflow must be deployed before activation'
-      });
-    }
-
-    // Activate in n8n
-    const activateResult = await workflowAnalysisService.activateWorkflow(workflow.n8nWorkflowId);
-
-    if (!activateResult.success) {
-      await workflow.addDeploymentHistory('activated', 'Activation failed', false, activateResult.error);
-      
-      return res.status(500).json({
-        status: 'fail',
-        message: `Activation failed: ${activateResult.error}`
-      });
-    }
-
-    // Update workflow status
-    await workflow.activate();
-
-    res.json({
-      status: 'success',
-      message: 'Workflow activated successfully',
-      data: {
-        workflow: workflow.summary,
-        triggerInfo: workflow.triggerInfo
-      }
-    });
-
-  } catch (error) {
-    console.error('Activate workflow error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error activating workflow'
-    });
-  }
-});
-
 // @desc    Deactivate workflow in n8n
 // @route   POST /api/workflows/:id/deactivate
 // @access  Private
@@ -683,6 +658,48 @@ router.post('/:id/credentials', protect, async (req, res) => {
             console.log(`✅ Successfully assigned ${assignResult.credentialsAssigned} credentials to workflow`);
             await workflow.addDeploymentHistory('updated', 
               `Assigned ${assignResult.credentialsAssigned} credentials to workflow`);
+
+            // Auto-activate workflow after successful credential assignment
+            console.log(`🚀 Attempting to activate workflow ${workflow.n8nWorkflowId}...`);
+            try {
+              const activationResult = await workflowAnalysisService.activateWorkflow(workflow.n8nWorkflowId);
+              
+              if (activationResult.success) {
+                console.log(`✅ Workflow activated successfully!`);
+                workflow.status = 'active';
+                await workflow.addDeploymentHistory('activated', 'Workflow activated after credential assignment');
+                
+                // Get webhook URLs from the activated workflow
+                console.log(`🔗 Retrieving webhook URLs...`);
+                const webhookResult = await workflowAnalysisService.getWorkflowWebhookUrls(workflow.n8nWorkflowId);
+                
+                if (webhookResult.success && webhookResult.webhookUrls.length > 0) {
+                  console.log(`🔗 Found ${webhookResult.webhookUrls.length} webhook URLs`);
+                  
+                  // Update workflow with live webhook URLs
+                  workflow.triggerInfo = webhookResult.webhookUrls.map(webhook => ({
+                    type: 'webhook',
+                    nodeId: webhook.nodeId,
+                    nodeName: webhook.nodeName,
+                    webhookUrl: webhook.webhookUrl,
+                    testUrl: webhook.testUrl,
+                    method: webhook.method,
+                    active: webhook.active,
+                    communicationMethod: 'HTTP POST requests to webhook URL',
+                    details: `Production: ${webhook.webhookUrl}\nTest: ${webhook.testUrl}`
+                  }));
+                  
+                  console.log(`📍 Updated with live webhook URLs:`, workflow.triggerInfo);
+                }
+              } else {
+                console.log(`⚠️ Workflow activation failed: ${activationResult.error}`);
+                workflow.status = 'credentials_pending';
+              }
+            } catch (activationError) {
+              console.error(`❌ Error during workflow activation:`, activationError);
+              workflow.status = 'credentials_pending';
+            }
+            
           } else {
             console.error(`❌ Failed to assign credentials to workflow: ${assignResult.error}`);
             errors.push(`Failed to assign credentials to workflow: ${assignResult.error}`);
@@ -753,7 +770,8 @@ router.post('/:id/credentials', protect, async (req, res) => {
         credentialsAdded: results,
         errors: errors.length > 0 ? errors : undefined,
         deployed: workflow.status === 'deployed' || workflow.status === 'active',
-        activated: workflow.status === 'active'
+        activated: workflow.status === 'active',
+        triggerInfo: workflow.triggerInfo
       }
     });
 
@@ -761,7 +779,91 @@ router.post('/:id/credentials', protect, async (req, res) => {
     console.error('❌ Error processing credentials:', error);
     res.status(500).json({
       status: 'error',
-      message: error.message
+      message: 'Error processing credentials'
+    });
+  }
+});
+
+// @desc    Activate workflow in n8n and get webhook URLs
+// @route   POST /api/workflows/:id/activate
+// @access  Private
+router.post('/:id/activate', protect, async (req, res) => {
+  try {
+    const workflow = await Workflow.findById(req.params.id);
+    
+    if (!workflow) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Workflow not found'
+      });
+    }
+
+    if (!workflow.n8nWorkflowId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Workflow is not deployed to n8n server yet'
+      });
+    }
+
+    console.log(`🚀 Activating workflow ${workflow.n8nWorkflowId}...`);
+
+    // Activate the workflow
+    const activationResult = await workflowAnalysisService.activateWorkflow(workflow.n8nWorkflowId);
+    
+    if (!activationResult.success) {
+      return res.status(400).json({
+        status: 'fail',
+        message: `Failed to activate workflow: ${activationResult.error}`
+      });
+    }
+
+    console.log(`✅ Workflow activated successfully!`);
+    
+    // Update workflow status
+    workflow.status = 'active';
+    await workflow.addDeploymentHistory('activated', 'Workflow manually activated');
+
+    // Get webhook URLs
+    console.log(`🔗 Retrieving webhook URLs...`);
+    const webhookResult = await workflowAnalysisService.getWorkflowWebhookUrls(workflow.n8nWorkflowId);
+    
+    let webhookUrls = [];
+    if (webhookResult.success) {
+      webhookUrls = webhookResult.webhookUrls;
+      console.log(`🔗 Found ${webhookUrls.length} webhook URLs`);
+      
+      // Update workflow with live webhook URLs
+      workflow.triggerInfo = webhookUrls.map(webhook => ({
+        type: 'webhook',
+        nodeId: webhook.nodeId,
+        nodeName: webhook.nodeName,
+        webhookUrl: webhook.webhookUrl,
+        testUrl: webhook.testUrl,
+        method: webhook.method,
+        active: webhook.active,
+        communicationMethod: 'HTTP POST requests to webhook URL',
+        details: `Production: ${webhook.webhookUrl}\nTest: ${webhook.testUrl}`
+      }));
+    }
+
+    await workflow.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Workflow activated successfully',
+      data: {
+        workflow: workflow.summary,
+        webhookUrls: webhookUrls,
+        triggerInfo: workflow.triggerInfo,
+        activated: true
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error activating workflow:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error activating workflow'
     });
   }
 });

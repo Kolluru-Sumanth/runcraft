@@ -250,9 +250,9 @@ function WebhooksTab({ webhookUrls, llmAnalysis }) {
         💡 Use these webhook URLs to trigger your workflow from external services or applications.
       </p>
 
-      {webhookUrls.map((webhook) => (
+      {webhookUrls.map((webhook, index) => (
         <div
-          key={webhook.id}
+          key={webhook.id || webhook.nodeId || index}
           style={{
             border: '1px solid #e5e7eb',
             borderRadius: '0.5rem',
@@ -278,20 +278,20 @@ function WebhooksTab({ webhookUrls, llmAnalysis }) {
                 {webhook.method || 'POST'}
               </span>
               <span style={{
-                backgroundColor: webhook.source === 'llm' ? '#8b5cf6' : '#6b7280',
+                backgroundColor: (webhook.webhookUrl ? '#10b981' : '#8b5cf6'),
                 color: 'white',
                 fontSize: '0.75rem',
                 fontWeight: '500',
                 padding: '0.25rem 0.5rem',
                 borderRadius: '0.375rem'
               }}>
-                {webhook.source === 'llm' ? 'AI Generated' : 'System'}
+                {webhook.webhookUrl ? 'Live URL' : 'AI Generated'}
               </span>
             </div>
             <button
-              onClick={() => copyToClipboard(webhook.url)}
+              onClick={() => copyToClipboard(webhook.webhookUrl || webhook.url)}
               style={{
-                backgroundColor: copiedUrl === webhook.url ? '#10b981' : '#667eea',
+                backgroundColor: copiedUrl === (webhook.webhookUrl || webhook.url) ? '#10b981' : '#667eea',
                 color: 'white',
                 border: 'none',
                 padding: '0.5rem',
@@ -304,7 +304,7 @@ function WebhooksTab({ webhookUrls, llmAnalysis }) {
                 gap: '0.25rem'
               }}
             >
-              {copiedUrl === webhook.url ? (
+              {copiedUrl === (webhook.webhookUrl || webhook.url) ? (
                 <>
                   <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -333,17 +333,17 @@ function WebhooksTab({ webhookUrls, llmAnalysis }) {
             wordBreak: 'break-all',
             marginBottom: '0.5rem'
           }}>
-            {webhook.url}
+            {webhook.webhookUrl || webhook.url}
           </div>
           
-          {webhook.description && (
+          {(webhook.description || webhook.details || webhook.nodeName) && (
             <p style={{ 
               color: '#6b7280', 
               fontSize: '0.875rem',
               margin: '0.5rem 0 0 0',
               lineHeight: '1.4'
             }}>
-              {webhook.description}
+              {webhook.description || (webhook.nodeName && `Webhook node: ${webhook.nodeName}`) || webhook.details}
             </p>
           )}
           
@@ -527,7 +527,14 @@ function PreviewPanel({ workflow, isGenerating }) {
   }
 
   const llmAnalysis = workflow.llmAnalysis;
-  const webhookUrls = llmAnalysis?.webhookUrls || [];
+  
+  // Prioritize real webhook URLs from deployment over LLM analysis
+  // triggerInfo is directly an array of webhook objects, not {webhookUrls: [...]}
+  const realWebhookUrls = workflow.triggerInfo || [];
+  const llmWebhookUrls = llmAnalysis?.webhookUrls || [];
+  
+  // Use real URLs if available, otherwise fall back to LLM generated URLs
+  const webhookUrls = realWebhookUrls.length > 0 ? realWebhookUrls : llmWebhookUrls;
   
   return (
     <div style={{ 

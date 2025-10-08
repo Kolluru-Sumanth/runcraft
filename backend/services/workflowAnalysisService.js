@@ -513,6 +513,99 @@ class WorkflowAnalysisService {
   }
 
   /**
+   * Get webhook URLs from an active workflow in n8n
+   * @param {string} workflowId - The n8n workflow ID
+   * @returns {Promise<Object>} Webhook URLs and workflow data
+   */
+  async getWorkflowWebhookUrls(workflowId) {
+    try {
+      if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
+        throw new Error('n8n server configuration not found');
+      }
+
+      console.log(`🔗 Fetching webhook URLs for workflow ${workflowId}...`);
+
+      const headers = {
+        'X-N8N-API-KEY': this.n8nAdminApiKey,
+        'Accept': 'application/json'
+      };
+
+      // Get the workflow details from n8n
+      const response = await axios.get(
+        `${this.n8nServerUrl}/api/v1/workflows/${workflowId}`,
+        { headers, timeout: this.timeout }
+      );
+
+      const workflowData = response.data;
+      const webhookUrls = [];
+
+      // Extract webhook URLs from webhook nodes
+      if (workflowData.nodes) {
+        for (const node of workflowData.nodes) {
+          if (node.type === 'n8n-nodes-base.webhook' || 
+              node.type === 'n8n-nodes-base.formTrigger' ||
+              node.type === 'n8n-nodes-base.chatTrigger') {
+            
+            let webhookUrl = '';
+            let webhookId = '';
+            
+            // Get webhook ID from node parameters
+            if (node.webhookId) {
+              webhookId = node.webhookId;
+            } else if (node.parameters?.webhookId) {
+              webhookId = node.parameters.webhookId;
+            } else {
+              // Generate webhook ID based on node ID or use workflow ID
+              webhookId = node.id || workflowId;
+            }
+
+            // Construct webhook URL
+            if (node.type === 'n8n-nodes-base.webhook') {
+              const path = node.parameters?.path || webhookId;
+              webhookUrl = `${this.n8nServerUrl}/webhook/${path}`;
+            } else if (node.type === 'n8n-nodes-base.chatTrigger') {
+              webhookUrl = `${this.n8nServerUrl}/webhook/${workflowId}/chat`;
+            } else if (node.type === 'n8n-nodes-base.formTrigger') {
+              webhookUrl = `${this.n8nServerUrl}/form/${webhookId}`;
+            }
+
+            if (webhookUrl) {
+              webhookUrls.push({
+                nodeId: node.id,
+                nodeName: node.name,
+                nodeType: node.type,
+                webhookUrl: webhookUrl,
+                testUrl: webhookUrl.replace('/webhook/', '/webhook-test/'),
+                method: node.parameters?.httpMethod || 'POST',
+                active: workflowData.active || false
+              });
+              
+              console.log(`🔗 Found webhook: ${node.name} -> ${webhookUrl}`);
+            }
+          }
+        }
+      }
+
+      return {
+        success: true,
+        workflowId: workflowId,
+        active: workflowData.active,
+        webhookUrls: webhookUrls,
+        workflowName: workflowData.name
+      };
+
+    } catch (error) {
+      console.error('Error getting webhook URLs:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        statusCode: error.response?.status
+      };
+    }
+  }
+
+  /**
    * Create credential in n8n
    * @param {Object} credentialData - Credential data
    * @returns {Promise<Object>} Creation result
