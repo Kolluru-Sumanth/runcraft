@@ -21,6 +21,7 @@ function EnhancedSidebar({
     { id: 'templates', icon: '📋', label: 'Templates' },
     { id: 'executions', icon: '⚡', label: 'Executions' },
     { id: 'credentials', icon: '🔐', label: 'Credentials' },
+    { id: 'ui', icon: '🎨', label: 'UI' },
     { id: 'settings', icon: '⚙️', label: 'Settings' }
   ];
 

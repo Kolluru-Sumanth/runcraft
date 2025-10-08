@@ -1,4 +1,6 @@
 /* Basic reset and fonts */
+@import "tailwindcss";
+
 * {
   box-sizing: border-box;
 }

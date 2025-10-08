@@ -11,6 +11,7 @@ import TemplatesPage from '../../pages/TemplatesPage';
 import ExecutionsPage from '../../pages/ExecutionsPage';
 import CredentialsPage from '../../pages/CredentialsPage';
 import SettingsPage from '../../pages/SettingsPage';
+import NewChat from '../../pages/NewChat';
 
 function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeMenu, onFileUpload, onGenerateUI }) {
   const renderContent = () => {
@@ -42,6 +43,9 @@ function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeM
       case 'settings':
         return <SettingsPage user={user} />;
       
+      case 'ui':
+        return <NewChat />
+      
       default:
         return <EmptyState user={user} />;
     }
@@ -58,10 +62,10 @@ function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeM
     }} className="main-content">
       <div style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ 
-          maxWidth: activeMenu === 'upload' ? 'none' : '64rem', 
+          maxWidth: (activeMenu === 'upload' || activeMenu === 'ui') ? 'none' : '64rem', 
           margin: '0 auto', 
-          padding: activeMenu === 'upload' ? '1rem' : '2rem',
-          height: activeMenu === 'upload' ? '100%' : 'auto'
+          padding: (activeMenu === 'upload' || activeMenu === 'ui') ? '1rem' : '2rem',
+          height: (activeMenu === 'upload' || activeMenu === 'ui') ? '100%' : 'auto'
         }} className="content-container">
           {renderContent()}
         </div>
