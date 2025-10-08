@@ -1,6 +1,6 @@
 import React from 'react';
 
-function MobileHeader({ onToggleSidebar, workflow, user, onSignOut }) {
+function MobileHeader({  onToggleSidebar, workflow, user, onSignOut }) {
   return (
     <div style={{
       display: 'none',
