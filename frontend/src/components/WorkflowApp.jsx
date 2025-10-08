@@ -26,17 +26,26 @@ function WorkflowApp({ activeMenu: propActiveMenu }) {
     if (path.includes('/executions')) return 'executions';
     if (path.includes('/credentials')) return 'credentials';
     if (path.includes('/settings')) return 'settings';
+    if (path.includes('/ui')) return 'ui';
     return 'dashboard';
   };
   
   const activeMenu = propActiveMenu || getActiveMenuFromPath();
   
-  // Auto-collapse sidebar when on upload page
+  // Auto-collapse sidebar when on upload page or UI page
   useEffect(() => {
-    if (activeMenu === 'upload') {
+    if (activeMenu === 'upload' || activeMenu === 'ui') {
       setIsSidebarCollapsed(true);
     }
   }, [activeMenu]);
+
+  // Expose the collapse callback globally
+  useEffect(() => {
+    window.collapseCallback = () => setIsSidebarCollapsed(true);
+    return () => {
+      window.collapseCallback = undefined;
+    };
+  }, []);
   
   const setActiveMenu = (menu) => {
     const routeMap = {
@@ -46,6 +55,8 @@ function WorkflowApp({ activeMenu: propActiveMenu }) {
       templates: '/templates',
       executions: '/executions',
       credentials: '/credentials',
+      ui: '/ui',
+      chat: '/chat',
       settings: '/settings'
     };
     navigate(routeMap[menu] || '/dashboard');

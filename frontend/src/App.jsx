@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ChatProvider } from './context/ChatContext';
 import SignIn from './components/SignIn';
 import SignUp from './components/SignUp';
 import WorkflowApp from './components/WorkflowApp';
@@ -31,6 +32,8 @@ function AppContent() {
       <Route path="/executions" element={<WorkflowApp activeMenu="executions" />} />
       <Route path="/credentials" element={<WorkflowApp activeMenu="credentials" />} />
       <Route path="/settings" element={<WorkflowApp activeMenu="settings" />} />
+      <Route path="/ui" element={<WorkflowApp activeMenu="ui" />} />
+      <Route path="/chat/:id" element={<WorkflowApp activeMenu="chat" />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
@@ -41,7 +44,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppContent />
+        <ChatProvider>
+          <AppContent />
+        </ChatProvider>
       </AuthProvider>
     </Router>
   );
