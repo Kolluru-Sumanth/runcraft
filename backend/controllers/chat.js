@@ -2,7 +2,7 @@ const Chat = require('../models/Chat');
 const axios = require('axios');
 
 
-export const createChat = async (req, res) => {
+const createChat = async (req, res) => {
   try {
     const { userId, workflow, message } = req.body;
 
@@ -47,7 +47,7 @@ export const createChat = async (req, res) => {
 };
 
 
-export const addMessage = async (req, res) => {
+const addMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
     const { message } = req.body;
@@ -105,7 +105,7 @@ export const addMessage = async (req, res) => {
 
 
 // Get all chats for a specific user
-export const getUserChats = async (req, res) => {
+const getUserChats = async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -118,7 +118,7 @@ export const getUserChats = async (req, res) => {
 };
 
 // Get a single chat by ID
-export const getChatById = async (req, res) => {
+const getChatById = async (req, res) => {
   try {
     const { chatId } = req.params;
 
@@ -133,4 +133,11 @@ export const getChatById = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Failed to fetch chat', error: error.message });
   }
+};
+
+module.exports = {
+  createChat,
+  addMessage,
+  getUserChats,
+  getChatById
 };

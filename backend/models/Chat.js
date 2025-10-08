@@ -33,4 +33,4 @@ const chatSchema = mongoose.Schema({
     messages: [messagesSchema],
 },{ timestamps: true });
 
-export default mongoose.model('Chat', chatSchema);
+module.exports=mongoose.model('Chat',chatSchema);
