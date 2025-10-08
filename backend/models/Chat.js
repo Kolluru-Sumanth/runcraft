@@ -24,18 +24,12 @@ const chatSchema = mongoose.Schema({
         required: true
     },
     container:{
-        name:{
             type: String,
-            required: true
-        },
-        id:{
-            type: String,
-            required: true
-        }
+            default: ""
     },
-    title: {
+    url:{
         type: String,
-        default: "New Chat"
+        default: ""
     },
     messages: [messagesSchema],
 },{ timestamps: true });
