@@ -1,12 +1,10 @@
-import axios from 'axios';
-import Chat from '../models/Chat.js';
+const Chat = require('../models/Chat');
+const axios = require('axios');
+
 
 export const createChat = async (req, res) => {
   try {
     const { userId, workflow, message } = req.body;
-    //call to get containerId
-    const containerName = "workflow-container"
-    const containerId = "1234567890abcdef";
 
     // Step 1: Create the chat with an initial system message
     const chat = await Chat.create({
@@ -16,22 +14,15 @@ export const createChat = async (req, res) => {
       messages: [{
         role: 'user',
         content: message
-      }],
-      container:{
-        name: containerName,
-        id: containerId
-      }
+      }]
     });
 
 
-    chat.container = { name: containerName, id: containerId };
 
     //should get this value from workflow document
     const n8nprompt = "this is a email summarizer workflow with POST /summarize and GET/mails endpoints"
     // Step 2: Send the initial system message to the n8n webhook
     const response = await axios.post('https://n8n.jayaprakash.space/webhook-test/chat', {
-      containerName,
-      containerId,
       sessionId: chat._id,
       message: message,
       n8nprompt,
@@ -39,10 +30,11 @@ export const createChat = async (req, res) => {
     });
     console.log("Response from n8n:", response.data);
     // Step 3: Extract AI's initial message
-    const aiMessage = response.data.message;
-
+    chat.url = response.data.preview_url || "";
+    chat.container = response.data.container_name || "";
+    const aiMessage = response.data.output;
     // Step 4: Add AI's response to the chat document
-    chat.messages.push({ role: 'ai', content: aiMessage });
+    chat.messages.push({ role: 'ai', content: aiMessage || "No response from AI" });
     await chat.save();
 
     // Step 5: Respond with the complete chat
@@ -71,22 +63,13 @@ export const addMessage = async (req, res) => {
       role: 'user',
       content: message
     });
-
-    // Extract container info
-    const containerName = chat.container?.name;
-    const containerId = chat.container?.id;
-
-    if (!containerName || !containerId) {
-      return res.status(400).json({ message: 'Chat container details missing' });
-    }
-
+    const container = chat.container;
     // Step 3: Get workflow context or prompt (replace this with real workflow data if needed)
     const n8nprompt = "this is a email summarizer workflow with POST /summarize and GET/mails endpoints";
 
     // Step 4: Send the user message to the n8n webhook
-    const response = await axios.post('https://n8n.jayaprakash.space/webhook/chat', {
-      containerName,
-      containerId,
+    const response = await axios.post('https://n8n.jayaprakash.space/webhook-test/chat', {
+      container,
       sessionId: chat._id,
       message,
       n8nprompt,
