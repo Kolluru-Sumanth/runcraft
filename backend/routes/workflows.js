@@ -37,6 +37,10 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
       });
     }
 
+    // Extract project name from request
+    const projectName = req.body.projectName || 'default-project';
+    console.log('🏗️ Project name received:', projectName);
+
     // Parse the JSON file
     let workflowData;
     try {
@@ -58,7 +62,7 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
 
     // Analyze workflow for credentials and triggers
     const initialCredentialRequirements = workflowAnalysisService.detectCredentialRequirements(workflowData);
-    const triggerInfo = workflowAnalysisService.analyzeTriggers(workflowData);
+    const triggerInfo = workflowAnalysisService.analyzeTriggers(workflowData, null, projectName);
 
     // Check if detected credentials actually exist in n8n server
     console.log(`🔍 Checking ${initialCredentialRequirements.length} credential requirements...`);
@@ -190,7 +194,9 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
       console.log('📤 Calling workflowAnalysisService.uploadWorkflowToN8n...');
       const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
         workflow.workflowData,
-        `user_${req.user._id}` // Use user ID as identifier
+        `user_${req.user._id}`, // Use user ID as identifier
+        req.user, // Pass user info for folder naming
+        projectName // Pass custom project name for webhook URLs
       );
 
       console.log('📥 Deploy result received:', deployResult);
@@ -239,6 +245,20 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
                 workflow.triggerInfo = workflow.triggerInfo.concat(liveWebhookTriggers);
                 
                 console.log('📍 Updated with live webhook URLs from n8n');
+                console.log('📍 Updated with live webhook URLs:', JSON.stringify(liveWebhookTriggers, null, 2));
+                
+                // Regenerate webhook usage description with the correct live URLs
+                try {
+                  console.log('🔤 Regenerating webhook usage description with live URLs...');
+                  const updatedWebhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
+                    workflow.workflowData, 
+                    workflow.triggerInfo
+                  );
+                  workflow.webhookUsageDescription = updatedWebhookDescription;
+                  console.log('✅ Regenerated webhook usage description with live URLs');
+                } catch (descriptionError) {
+                  console.error('❌ Failed to regenerate webhook description with live URLs:', descriptionError.message);
+                }
               }
             } catch (webhookError) {
               console.error('⚠️ Failed to retrieve webhook URLs:', webhookError.message);
@@ -256,20 +276,54 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
           workflow.status = 'credentials_pending';
         }
 
-        // Update trigger URLs with the actual n8n workflow ID
+        // Update trigger URLs with the actual n8n workflow ID and project-based paths
+        console.log('🔄 Updating trigger info with deployed workflow details...');
         workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
           workflow.workflowData, 
-          deployResult.workflowId
+          deployResult.workflowId,
+          projectName
         );
+        console.log('🔄 Updated trigger info:', JSON.stringify(workflow.triggerInfo, null, 2));
 
+        // Store live webhook URLs in the Workflow model
+        const liveWebhookUrls = workflow.triggerInfo
+          .filter(w => w.webhookUrl)
+          .map(w => ({
+            id: w.nodeId,
+            type: w.type,
+            method: w.httpMethods || 'POST',
+            url: w.webhookUrl,
+            description: w.details,
+            expectedPayload: '',
+            generated: true,
+            source: 'n8n'
+          }));
+        workflow.webhookUrls = liveWebhookUrls;
         await workflow.save();
         await workflow.addDeploymentHistory('deployed', `Deployed with ID: ${deployResult.workflowId}`);
-        
+
+        // Generate webhook usage description if webhooks are available and not already generated with live URLs
+        if (workflow.triggerInfo && workflow.triggerInfo.length > 0 && !workflow.webhookUsageDescription) {
+          try {
+            console.log('🔤 Generating webhook usage description for initial upload (fallback)...');
+            const webhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
+              workflow.workflowData, 
+              workflow.triggerInfo
+            );
+            workflow.webhookUsageDescription = webhookDescription;
+            await workflow.save();
+            console.log('✅ Generated webhook usage description for initial upload (fallback)');
+          } catch (descriptionError) {
+            console.error('❌ Failed to generate webhook description for initial upload:', descriptionError.message);
+          }
+        }
+
         deploymentResult = {
           deployed: true,
           workflowId: deployResult.workflowId,
           activated: workflow.status === 'active',
           triggerInfo: workflow.triggerInfo,
+          webhookUrls: liveWebhookUrls,
           needsCredentials: unconfiguredCredentials.length > 0,
           missingCredentials: unconfiguredCredentials.map(cred => ({
             nodeName: cred.nodeName,
@@ -308,8 +362,9 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
         llmAnalysis,
         needsCredentials: credentialRequirements.length > 0,
         needsMissingCredentials: unconfiguredCredentials.length > 0,
-        webhookUrls: llmAnalysis?.webhookUrls || [],
-        deployment: deploymentResult
+  webhookUrls: workflow.webhookUrls || [],
+        deployment: deploymentResult,
+        webhookUsageDescription: workflow.webhookUsageDescription
       }
     });
 
@@ -434,10 +489,19 @@ router.post('/:id/deploy', protect, async (req, res) => {
       });
     }
 
+    // Extract project name from existing workflow or use default
+    const projectName = req.body.projectName || 
+      workflowAnalysisService.extractProjectNameFromWorkflow(workflow.workflowData.name) ||
+      'default-project';
+    
+    console.log('🏗️ Deploy using project name:', projectName);
+
     // Deploy to n8n
     const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
       workflow.workflowData,
-      req.user.n8nConfig.userId
+      req.user.n8nConfig.userId,
+      req.user, // Pass user info for folder naming
+      projectName // Pass project name for webhook URLs
     );
 
     if (!deployResult.success) {
@@ -457,7 +521,8 @@ router.post('/:id/deploy', protect, async (req, res) => {
     // Update trigger URLs with the actual n8n workflow ID
     workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
       workflow.workflowData, 
-      deployResult.workflowId
+      deployResult.workflowId,
+      projectName
     );
 
     await workflow.save();
@@ -690,6 +755,21 @@ router.post('/:id/credentials', protect, async (req, res) => {
                   }));
                   
                   console.log(`📍 Updated with live webhook URLs:`, workflow.triggerInfo);
+                  
+                  // Generate webhook usage description using LLM
+                  try {
+                    console.log('🔤 Generating webhook usage description...');
+                    const llmWorkflowService = require('../services/llmWorkflowService');
+                    const webhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
+                      workflow.workflowData, 
+                      workflow.triggerInfo
+                    );
+                    workflow.webhookUsageDescription = webhookDescription;
+                    console.log('✅ Generated webhook usage description:', webhookDescription);
+                  } catch (descriptionError) {
+                    console.error('❌ Failed to generate webhook description:', descriptionError.message);
+                    workflow.webhookUsageDescription = `This workflow provides ${workflow.triggerInfo.length} webhook endpoint${workflow.triggerInfo.length > 1 ? 's' : ''} for triggering automation workflows.`;
+                  }
                 }
               } else {
                 console.log(`⚠️ Workflow activation failed: ${activationResult.error}`);
@@ -726,9 +806,17 @@ router.post('/:id/credentials', protect, async (req, res) => {
       console.log('🚀 All credentials configured - attempting auto-deployment...');
       
       try {
+        // Extract project name from existing workflow or use default
+        const projectName = workflowAnalysisService.extractProjectNameFromWorkflow(workflow.workflowData.name) || 
+          'default-project';
+        
+        console.log('🏗️ Auto-deploy using project name:', projectName);
+        
         const deployResult = await workflowAnalysisService.uploadWorkflowToN8n(
           workflow.workflowData,
-          `user_${workflow.userId}` 
+          `user_${workflow.userId}`,
+          req.user, // Pass user info for folder naming
+          projectName // Pass project name for webhook URLs
         );
 
         if (deployResult.success) {
@@ -749,7 +837,8 @@ router.post('/:id/credentials', protect, async (req, res) => {
           // Update trigger URLs with actual n8n workflow ID
           workflow.triggerInfo = workflowAnalysisService.analyzeTriggers(
             workflow.workflowData, 
-            deployResult.workflowId
+            deployResult.workflowId,
+            projectName
           );
 
           await workflow.addDeploymentHistory('deployed', `Auto-deployed after credentials configuration with ID: ${deployResult.workflowId}`);
@@ -771,7 +860,8 @@ router.post('/:id/credentials', protect, async (req, res) => {
         errors: errors.length > 0 ? errors : undefined,
         deployed: workflow.status === 'deployed' || workflow.status === 'active',
         activated: workflow.status === 'active',
-        triggerInfo: workflow.triggerInfo
+        triggerInfo: workflow.triggerInfo,
+        webhookUsageDescription: workflow.webhookUsageDescription
       }
     });
 

@@ -360,6 +360,248 @@ Format your response as JSON:
     }
     return simplified;
   }
+
+  /**
+   * Generate webhook usage descriptions using LLM
+   * @param {Object} workflowData - The n8n workflow JSON data
+   * @param {Array} webhookUrls - Array of webhook URLs with their details
+   * @returns {Promise<string>} Descriptive paragraph explaining webhook usage
+   */
+  async generateWebhookUsageDescription(workflowData, webhookUrls) {
+    try {
+      if (!webhookUrls || webhookUrls.length === 0) {
+        return "This workflow does not contain any webhook triggers.";
+      }
+
+      // Extract workflow context for better descriptions
+      const workflowSummary = this.extractWorkflowSummary(workflowData);
+      
+      // Filter to get only the primary webhook URLs (avoid duplicates and test URLs)
+      const primaryWebhooks = this.filterPrimaryWebhooks(webhookUrls);
+      
+      // Build detailed webhook information including expected payloads
+      const webhookInfo = primaryWebhooks.map(webhook => {
+        const nodeId = webhook.nodeId;
+        const node = workflowData.nodes?.find(n => n.id === nodeId);
+        
+        // Extract expected payload information from node configuration
+        let expectedPayload = '{"message": "text", "user_id": "123"}';
+        let payloadFields = [];
+        
+        if (node) {
+          // Analyze node parameters to determine expected payload structure
+          if (node.type === 'n8n-nodes-base.webhook') {
+            if (node.parameters?.options?.allowedOrigins) {
+              payloadFields.push('Origin validation required');
+            }
+            if (node.parameters?.responseMode) {
+              payloadFields.push(`Response mode: ${node.parameters.responseMode}`);
+            }
+            if (node.parameters?.options?.ignoreBots === false) {
+              payloadFields.push('Bot requests allowed');
+            }
+            
+            // Simple inline payload structure for better readability
+            expectedPayload = '{"message": "text", "user_id": "123"}';
+          } else if (node.type === 'n8n-nodes-base.chatTrigger') {
+            expectedPayload = '{"chatInput": "user message", "sessionId": "abc"}';
+          } else {
+            expectedPayload = '{"data": "value"}';
+          }
+        } else {
+          expectedPayload = '{"message": "text"}';
+        }
+
+        return {
+          url: webhook.webhookUrl || webhook.url,
+          nodeName: webhook.nodeName || webhook.name,
+          nodeType: webhook.nodeType || webhook.type,
+          method: webhook.method || 'POST',
+          expectedPayload,
+          payloadFields,
+          purpose: this.inferWebhookPurpose(webhook.nodeName, node)
+        };
+      });
+
+      // Generate workflow purpose summary
+      const workflowPurpose = this.generateWorkflowPurpose(workflowData, workflowSummary);
+
+      const prompt = `
+You are an expert API integration specialist. Create a concise description that starts with what the workflow does, then explains how to integrate with the primary webhook endpoint.
+
+WORKFLOW PURPOSE: ${workflowPurpose}
+
+PRIMARY WEBHOOK ENDPOINT:
+${webhookInfo.length > 0 ? `
+${webhookInfo[0].method} ${webhookInfo[0].url}
+- Purpose: ${webhookInfo[0].purpose}
+- Expected Payload: ${webhookInfo[0].expectedPayload}
+- Node: ${webhookInfo[0].nodeName}
+` : 'No primary webhook found'}
+
+INSTRUCTIONS:
+- Start with: "This workflow [what it does]."
+- Then explain: "Send [METHOD] requests to [URL] with [payload] to [action]."
+- Use exactly 2 sentences maximum
+- Focus only on the PRIMARY webhook endpoint
+- Use natural language, not JSON format
+- Be specific and actionable
+
+EXAMPLE FORMAT:
+"This workflow processes chat messages using AI. Send POST requests to https://example.com/webhook with {"message": "text", "user_id": "123"} to trigger message processing."
+
+CRITICAL: Return ONLY the 2-sentence description, no extra text.`;
+
+      console.log('🔤 Generating specific webhook usage description...');
+      const response = await this.callLLM(prompt);
+      
+      if (response && response.trim()) {
+        let description = response.trim();
+        
+        // Safety check: ensure we're not returning JSON format
+        if (description.startsWith('{') || description.startsWith('[') || description.includes('"integration_guide"')) {
+          console.log('⚠️ AI returned JSON, converting to natural language...');
+          description = this.convertJsonToNaturalLanguage(webhookInfo, workflowPurpose);
+        }
+        
+        console.log('✅ Generated webhook usage description');
+        return description;
+      } else {
+        return this.generateFallbackDescription(webhookInfo, workflowPurpose);
+      }
+
+    } catch (error) {
+      console.error('❌ Error generating webhook usage description:', error.message);
+      const primaryWebhooks = this.filterPrimaryWebhooks(webhookUrls);
+      const workflowPurpose = this.generateWorkflowPurpose(workflowData, this.extractWorkflowSummary(workflowData));
+      return this.generateFallbackDescription(primaryWebhooks, workflowPurpose);
+    }
+  }
+
+  /**
+   * Filter webhook URLs to get only the primary/main webhook endpoints
+   * @param {Array} webhookUrls - Array of all webhook URLs
+   * @returns {Array} Filtered array with primary webhooks only
+   */
+  filterPrimaryWebhooks(webhookUrls) {
+    if (!webhookUrls || webhookUrls.length === 0) return [];
+    
+    // Priority order: 1) webhook nodes, 2) chat triggers, 3) others
+    const webhookNodes = webhookUrls.filter(w => 
+      (w.nodeType || w.type) === 'n8n-nodes-base.webhook' || 
+      (w.nodeName || w.name || '').toLowerCase().includes('webhook')
+    );
+    
+    const chatTriggers = webhookUrls.filter(w => 
+      (w.nodeType || w.type) === 'n8n-nodes-base.chatTrigger' || 
+      (w.nodeName || w.name || '').toLowerCase().includes('chat')
+    );
+    
+    // Return the most relevant webhook (prefer webhook nodes over chat triggers)
+    if (webhookNodes.length > 0) {
+      return [webhookNodes[0]]; // Return only the first/primary webhook
+    } else if (chatTriggers.length > 0) {
+      return [chatTriggers[0]]; // Return only the first chat trigger
+    } else {
+      return [webhookUrls[0]]; // Return the first available webhook
+    }
+  }
+
+  /**
+   * Generate workflow purpose summary based on workflow data
+   * @param {Object} workflowData - The n8n workflow JSON data
+   * @param {Object} workflowSummary - Extracted workflow summary
+   * @returns {string} Workflow purpose description
+   */
+  generateWorkflowPurpose(workflowData, workflowSummary) {
+    const workflowName = workflowData.name || 'workflow';
+    const nodes = workflowData.nodes || [];
+    
+    // Analyze nodes to determine workflow purpose
+    const hasOpenAI = nodes.some(n => n.type?.includes('openAi') || n.name?.toLowerCase().includes('openai'));
+    const hasChat = nodes.some(n => n.name?.toLowerCase().includes('chat') || n.type?.includes('chat'));
+    const hasWebhook = nodes.some(n => n.type === 'n8n-nodes-base.webhook');
+    const hasEmail = nodes.some(n => n.type?.includes('email') || n.name?.toLowerCase().includes('email'));
+    const hasDatabase = nodes.some(n => n.type?.includes('postgres') || n.type?.includes('mysql') || n.name?.toLowerCase().includes('database'));
+    
+    if (hasOpenAI && hasChat) {
+      return 'processes chat messages using AI to generate intelligent responses';
+    } else if (hasOpenAI) {
+      return 'uses AI to process and analyze data automatically';
+    } else if (hasChat) {
+      return 'handles chat messages and conversations';
+    } else if (hasEmail) {
+      return 'processes and manages email communications';
+    } else if (hasDatabase) {
+      return 'manages database operations and data processing';
+    } else if (hasWebhook) {
+      return 'processes incoming webhook requests and triggers automated actions';
+    } else {
+      return 'automates tasks and processes data';
+    }
+  }
+
+  /**
+   * Convert JSON response to natural language if AI returns structured data
+   * @param {Array} webhookInfo - Array of webhook information
+   * @param {string} workflowPurpose - What the workflow does
+   * @returns {string} Natural language description
+   */
+  convertJsonToNaturalLanguage(webhookInfo, workflowPurpose = 'processes data') {
+    if (webhookInfo.length === 0) {
+      return `This workflow ${workflowPurpose} but no webhook endpoints are configured.`;
+    }
+    
+    const webhook = webhookInfo[0]; // Use only the primary webhook
+    return `This workflow ${workflowPurpose}. Send ${webhook.method} requests to ${webhook.url} with payload ${webhook.expectedPayload} to ${webhook.purpose.replace('Receive', 'receive').replace('Send', 'send')}.`;
+  }
+
+  /**
+   * Infer webhook purpose based on node name and configuration
+   * @param {string} nodeName - Name of the webhook node
+   * @param {Object} node - Full node object
+   * @returns {string} Inferred purpose
+   */
+  inferWebhookPurpose(nodeName, node) {
+    const name = (nodeName || '').toLowerCase();
+    
+    if (name.includes('chat') || name.includes('message')) {
+      return 'Receive chat messages or conversation inputs';
+    }
+    if (name.includes('response') || name.includes('reply')) {
+      return 'Send responses or replies back to users';
+    }
+    if (name.includes('trigger') || name.includes('start')) {
+      return 'Trigger workflow execution';
+    }
+    if (name.includes('webhook') && node?.type === 'n8n-nodes-base.webhook') {
+      return 'General webhook endpoint for external integrations';
+    }
+    if (node?.type === 'n8n-nodes-base.chatTrigger') {
+      return 'Interactive chat interface endpoint';
+    }
+    
+    return 'Trigger workflow with custom data';
+  }
+
+  /**
+   * Generate fallback description when LLM fails
+   * @param {Array} webhookUrls - Array of webhook URLs
+   * @param {string} workflowPurpose - What the workflow does
+   * @returns {string} Fallback description
+   */
+  generateFallbackDescription(webhookUrls, workflowPurpose = 'processes data and automates tasks') {
+    if (webhookUrls.length === 0) {
+      return `This workflow ${workflowPurpose} but does not have any webhook endpoints configured.`;
+    }
+    
+    const webhook = webhookUrls[0]; // Use only the primary webhook
+    const url = webhook.url || webhook.webhookUrl;
+    const method = webhook.method || 'POST';
+    const expectedPayload = webhook.expectedPayload || '{"message": "text", "user_id": "123"}';
+    
+    return `This workflow ${workflowPurpose}. Send ${method} requests to ${url} with payload ${expectedPayload} to trigger the workflow.`;
+  }
 }
 
 module.exports = new LLMWorkflowService();
