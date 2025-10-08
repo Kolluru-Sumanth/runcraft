@@ -195,6 +195,12 @@ const workflowSchema = new mongoose.Schema({
   lastActivation: {
     type: Date,
     required: false
+  },
+  webhookUsageDescription: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: [1000, 'Webhook usage description cannot exceed 1000 characters']
   }
 }, {
   timestamps: true,

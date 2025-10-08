@@ -8,6 +8,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
   const [currentWorkflow, setCurrentWorkflow] = useState(null);
   const [credentialInputs, setCredentialInputs] = useState({});
   const [isSubmittingCredentials, setIsSubmittingCredentials] = useState(false);
+  const [projectName, setProjectName] = useState('');
 
   const showMissingCredentialsModal = (missing, workflowData) => {
     console.log('🔧 Debug: showMissingCredentialsModal called with:', { missing, workflowData });
@@ -182,6 +183,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('workflow', file);
+      formData.append('projectName', projectName || 'default-project');
 
       // Get auth token (using correct key)
       const token = localStorage.getItem('runcraft_token');
@@ -238,7 +240,8 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         workflowId: result.data.workflow.id,  // This is the MongoDB ObjectId from summary
         status: result.data.workflow.status,
         uploadedAt: new Date().toISOString(),
-        deployment: result.data.deployment
+        deployment: result.data.deployment,
+        webhookUsageDescription: result.data.webhookUsageDescription
       };
 
       console.log('🔧 Debug: workflowWithAnalysis:', workflowWithAnalysis);
@@ -303,6 +306,52 @@ function UploadPanel({ onFileUpload, user, workflow }) {
           margin: 0 
         }}>
           Upload your n8n workflow JSON file to generate a React frontend.
+        </p>
+      </div>
+
+      {/* Project Name Input */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Project Name
+        </label>
+        <input
+          type="text"
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
+          placeholder="Enter project name (e.g., my-awesome-project)"
+          style={{
+            width: '100%',
+            padding: '0.75rem 1rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            backgroundColor: '#ffffff',
+            transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+            outline: 'none'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#667eea';
+            e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#d1d5db';
+            e.target.style.boxShadow = 'none';
+          }}
+          disabled={isUploading}
+        />
+        <p style={{
+          fontSize: '0.75rem',
+          color: '#6b7280',
+          marginTop: '0.25rem',
+          margin: '0.25rem 0 0 0'
+        }}>
+          This will be used to organize your webhook URLs (e.g., /webhook/project-name/webhook-id)
         </p>
       </div>
 

@@ -208,7 +208,7 @@ function AnalysisTab({ llmAnalysis, workflow }) {
 }
 
 // Webhooks Tab Component
-function WebhooksTab({ webhookUrls, llmAnalysis }) {
+function WebhooksTab({ webhookUrls, llmAnalysis, webhookUsageDescription }) {
   const [copiedUrl, setCopiedUrl] = useState(null);
 
   const copyToClipboard = async (url) => {
@@ -249,6 +249,40 @@ function WebhooksTab({ webhookUrls, llmAnalysis }) {
       }}>
         💡 Use these webhook URLs to trigger your workflow from external services or applications.
       </p>
+
+      {webhookUsageDescription && (
+        <div style={{
+          padding: '1rem',
+          backgroundColor: '#f0fdf4',
+          borderRadius: '0.5rem',
+          border: '1px solid #bbf7d0',
+          marginBottom: '1rem'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.5rem',
+            marginBottom: '0.5rem'
+          }}>
+            <span style={{ fontSize: '1rem' }}>🤖</span>
+            <span style={{
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#166534'
+            }}>
+              AI-Generated Integration Guide
+            </span>
+          </div>
+          <p style={{
+            color: '#166534',
+            fontSize: '0.875rem',
+            lineHeight: '1.5',
+            margin: 0
+          }}>
+            {webhookUsageDescription}
+          </p>
+        </div>
+      )}
 
       {webhookUrls.map((webhook, index) => (
         <div
@@ -652,7 +686,11 @@ function PreviewPanel({ workflow, isGenerating }) {
           <AnalysisTab llmAnalysis={llmAnalysis} workflow={workflow} />
         )}
         {activeTab === 'webhooks' && (
-          <WebhooksTab webhookUrls={webhookUrls} llmAnalysis={llmAnalysis} />
+          <WebhooksTab 
+            webhookUrls={webhookUrls} 
+            llmAnalysis={llmAnalysis} 
+            webhookUsageDescription={workflow.webhookUsageDescription}
+          />
         )}
         {activeTab === 'insights' && (
           <InsightsTab llmAnalysis={llmAnalysis} workflow={workflow} />

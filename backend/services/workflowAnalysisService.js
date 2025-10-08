@@ -9,11 +9,95 @@ class WorkflowAnalysisService {
   }
 
   /**
+   * Extract project name from workflow name for URL structure
+   * @param {string} workflowName - Full workflow name (e.g., "[username] Project Name (uniqueId)")
+   * @returns {string} Clean project name for URL
+   */
+  extractProjectNameFromWorkflow(workflowName) {
+    if (!workflowName) return 'default-project';
+    
+    let projectName = workflowName;
+    
+    // Remove user prefix: "[username] Project Name (uniqueId)" -> "Project Name (uniqueId)"
+    if (projectName.includes(']')) {
+      projectName = projectName.split(']')[1].trim();
+    }
+    
+    // Remove unique suffix: "Project Name (uniqueId)" -> "Project Name"
+    if (projectName.includes('(')) {
+      projectName = projectName.split('(')[0].trim();
+    }
+    
+    // Convert to URL-friendly format: "Project Name" -> "project-name"
+    projectName = projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-')         // Replace spaces with hyphens
+      .replace(/-+/g, '-')          // Replace multiple hyphens with single
+      .replace(/^-|-$/g, '');       // Remove leading/trailing hyphens
+    
+    return projectName || 'default-project';
+  }
+
+  /**
    * Generate a unique workflow ID using crypto
    * @returns {string} Unique workflow ID
    */
   generateUniqueWorkflowId() {
     return crypto.randomUUID();
+  }
+
+  /**
+   * Generate unique webhook IDs for workflow nodes to avoid conflicts
+   * @param {Object} workflowData - Original workflow data
+   * @param {string} uniqueId - Unique identifier for this deployment
+   * @param {string} customProjectName - Optional custom project name for webhook paths
+   * @returns {Object} Workflow data with unique webhook IDs
+   */
+  generateUniqueWebhookIds(workflowData, uniqueId, customProjectName = null) {
+    const clonedWorkflow = JSON.parse(JSON.stringify(workflowData));
+    
+    // Use custom project name if provided, otherwise extract from workflow name
+    const projectName = customProjectName || this.extractProjectNameFromWorkflow(workflowData.name);
+    
+    if (clonedWorkflow.nodes) {
+      clonedWorkflow.nodes.forEach(node => {
+        if (node.type === 'n8n-nodes-base.webhook' || 
+            node.type === 'n8n-nodes-base.formTrigger' ||
+            node.type === 'n8n-nodes-base.chatTrigger') {
+          
+          // Generate a new unique webhook ID for this node
+          const nodeSpecificId = `${uniqueId}-${node.id || 'webhook'}`.substring(0, 36);
+          
+          // Create project-based webhook path that will be used by n8n server
+          const webhookPath = `${projectName}/${nodeSpecificId}`;
+          
+          // Update webhook configuration in node parameters
+          if (!node.parameters) {
+            node.parameters = {};
+          }
+          
+          // Set the webhook path to include project name
+          if (node.type === 'n8n-nodes-base.webhook') {
+            node.parameters.path = webhookPath;
+            node.parameters.webhookId = nodeSpecificId;
+          } else if (node.type === 'n8n-nodes-base.formTrigger') {
+            node.parameters.path = webhookPath;
+            node.parameters.formTitle = node.parameters.formTitle || `${projectName} Form`;
+          } else if (node.type === 'n8n-nodes-base.chatTrigger') {
+            // Chat triggers use a different path structure
+            node.parameters.path = `${projectName}/chat/${nodeSpecificId}`;
+          }
+          
+          // Set webhook ID at node level for reference
+          node.webhookId = nodeSpecificId;
+          
+          console.log(`🔗 Generated project-based webhook path for ${node.name}: ${webhookPath}`);
+        }
+      });
+    }
+    
+    return clonedWorkflow;
   }
 
   /**
@@ -173,14 +257,29 @@ class WorkflowAnalysisService {
    * @param {string} n8nWorkflowId - The n8n workflow ID (if deployed)
    * @returns {Array} Array of trigger information
    */
-  analyzeTriggers(workflowData, n8nWorkflowId = null) {
+  analyzeTriggers(workflowData, n8nWorkflowId = null, projectName = null) {
     const triggers = [];
     const baseUrl = this.n8nServerUrl.endsWith('/') ? this.n8nServerUrl : `${this.n8nServerUrl}/`;
+    
+    console.log('🔄 analyzeTriggers called with projectName:', projectName);
     
     for (const node of workflowData.nodes || []) {
       const nodeType = node.type || '';
       const nodeParameters = node.parameters || {};
       const webhookId = node.webhookId || n8nWorkflowId;
+      
+      // If we have a project name and this is a webhook node, create project-based path
+      if (projectName && this.isWebhookTrigger(node)) {
+        // Generate project-based path
+        const nodeSpecificId = webhookId || `${n8nWorkflowId}-${node.id}`;
+        const projectPath = `${projectName}/${nodeSpecificId}`;
+        
+        // Update node parameters to include project-based path
+        node.parameters = node.parameters || {};
+        node.parameters.path = projectPath;
+        
+        console.log(`🔄 Set project-based path for ${node.name}: ${projectPath}`);
+      }
       
       // Detect different trigger types and pass workflow ID for URL generation
       if (this.isWebhookTrigger(node)) {
@@ -254,21 +353,31 @@ class WorkflowAnalysisService {
       baseUrl += '/';
     }
 
+    // Check if node has a project-based path parameter (set during deployment)
+    const nodePath = node?.parameters?.path;
+    let webhookPath = '';
+    
+    if (nodePath && nodePath.includes('/')) {
+      // Use the project-based path if available (e.g., "project-name/webhook-id")
+      webhookPath = nodePath;
+    } else {
+      // Fallback to simple workflow ID
+      webhookPath = workflowId;
+    }
+
     const urls = {
-      production: `${baseUrl}webhook/${workflowId}`,
-      test: `${baseUrl}webhook-test/${workflowId}`,
+      production: `${baseUrl}webhook/${webhookPath}`,
+      test: `${baseUrl}webhook-test/${webhookPath}`,
       chat: null
     };
 
-    // Add path if specified
-    if (node?.parameters?.path) {
-      urls.production += `/${node.parameters.path}`;
-      urls.test += `/${node.parameters.path}`;
-    }
-
     // Check if this is a chat trigger
     if (this.isChatTrigger(node)) {
-      urls.chat = `${baseUrl}webhook/${workflowId}/chat`;
+      if (nodePath && nodePath.includes('/')) {
+        urls.chat = `${baseUrl}webhook/${nodePath}`;
+      } else {
+        urls.chat = `${baseUrl}webhook/${workflowId}/chat`;
+      }
     }
 
     return urls;
@@ -368,10 +477,14 @@ class WorkflowAnalysisService {
    * Upload workflow to n8n server with enhanced validation
    * @param {Object} workflowData - The workflow data to upload
    * @param {string} userId - The user's n8n user ID
+   * @param {Object} userInfo - User information for folder naming
+   * @param {string} projectName - Custom project name for webhook URLs
    * @returns {Promise<Object>} Upload result
    */
-  async uploadWorkflowToN8n(workflowData, userId) {
+  async uploadWorkflowToN8n(workflowData, userId, userInfo = null, projectName = null) {
     try {
+      console.log('🏗️ uploadWorkflowToN8n received projectName:', projectName);
+      
       if (!this.n8nServerUrl || !this.n8nAdminApiKey) {
         throw new Error('n8n server configuration not found');
       }
@@ -392,19 +505,26 @@ class WorkflowAnalysisService {
         'Accept': 'application/json'
       };
 
-      // Generate unique workflow name if needed
+      // Generate unique workflow name with user folder structure
       const uniqueId = this.generateUniqueWorkflowId();
-      const workflowName = workflowData.name.includes('(') ? 
-        workflowData.name : 
-        `${workflowData.name} (${uniqueId.substring(0, 8)})`;
+      const userName = userInfo?.name || userInfo?.email?.split('@')[0] || `user_${userId.substring(0, 8)}`;
+      const workflowBaseName = workflowData.name.includes('(') ? 
+        workflowData.name.split('(')[0].trim() : 
+        workflowData.name;
+      
+      // Create user folder structure: [UserName] WorkflowName (uniqueId)
+      const workflowName = `[${userName}] ${workflowBaseName} (${uniqueId.substring(0, 8)})`;
+
+      // Clone workflow data and generate unique webhook IDs for this deployment
+      const processedWorkflowData = this.generateUniqueWebhookIds(workflowData, uniqueId, projectName);
 
       // Prepare workflow for upload - only include properties that n8n accepts
       const workflowPayload = {
         name: workflowName,
-        nodes: workflowData.nodes || [],
-        connections: workflowData.connections || {},
-        settings: workflowData.settings || {},
-        staticData: workflowData.staticData || {}
+        nodes: processedWorkflowData.nodes || [],
+        connections: processedWorkflowData.connections || {},
+        settings: processedWorkflowData.settings || {},
+        staticData: processedWorkflowData.staticData || {}
         // Note: Removed 'active' and 'meta' properties as n8n API doesn't accept them during creation
       };
 
@@ -554,19 +674,29 @@ class WorkflowAnalysisService {
               webhookId = node.webhookId;
             } else if (node.parameters?.webhookId) {
               webhookId = node.parameters.webhookId;
+            } else if (node.parameters?.path) {
+              // If there's a path parameter, use it as the webhook ID
+              webhookId = node.parameters.path;
             } else {
               // Generate webhook ID based on node ID or use workflow ID
               webhookId = node.id || workflowId;
             }
 
-            // Construct webhook URL
+            // Construct webhook URL using the path that was set in n8n
             if (node.type === 'n8n-nodes-base.webhook') {
-              const path = node.parameters?.path || webhookId;
-              webhookUrl = `${this.n8nServerUrl}/webhook/${path}`;
+              // Use the path parameter that now includes project name
+              const webhookPath = node.parameters?.path || webhookId;
+              webhookUrl = `${this.n8nServerUrl}/webhook/${webhookPath}`;
+              
+              console.log(`🔗 Webhook URL constructed: ${webhookUrl} (path: ${webhookPath})`);
             } else if (node.type === 'n8n-nodes-base.chatTrigger') {
-              webhookUrl = `${this.n8nServerUrl}/webhook/${workflowId}/chat`;
+              // Use the path parameter for chat triggers
+              const chatPath = node.parameters?.path || `default-project/chat/${webhookId}`;
+              webhookUrl = `${this.n8nServerUrl}/webhook/${chatPath}`;
             } else if (node.type === 'n8n-nodes-base.formTrigger') {
-              webhookUrl = `${this.n8nServerUrl}/form/${webhookId}`;
+              // Use the path parameter for form triggers
+              const formPath = node.parameters?.path || `default-project/${webhookId}`;
+              webhookUrl = `${this.n8nServerUrl}/form/${formPath}`;
             }
 
             if (webhookUrl) {
