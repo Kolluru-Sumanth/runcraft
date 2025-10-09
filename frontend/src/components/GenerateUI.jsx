@@ -7,6 +7,8 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
   const [prompt, setPrompt] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
+  const [chatId, setChatId] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -15,7 +17,7 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
       try {
         setLoading(true);
         setError(null);
-        const token = localStorage.getItem('runcraft_token');
+  const token = localStorage.getItem('runcraft_token');
         const response = await fetch(`${API_BASE_URL}/workflows`, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -45,25 +47,133 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
     fetchWorkflows();
   }, []);
 
-  const handleWorkflowChange = (e) => {
-    setSelectedWorkflow(e.target.value);
-    // Optionally, trigger workflow change logic here
+  const handleWorkflowChange = async (e) => {
+    const workflowId = e.target.value;
+    setSelectedWorkflow(workflowId);
+    setChatId(null);
+    setChatHistory([]);
+    // clear preview while we fetch
+    setPreviewUrl('');
+    // Fetch previous chats for this workflow and user
+    if (user?._id && workflowId) {
+      try {
+        const token = localStorage.getItem('runcraft_token');
+        const response = await fetch(`${API_BASE_URL}/chat/user/${user._id}/workflow/${workflowId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const chats = await response.json();
+          console.log('Fetched chats for workflow', workflowId, chats);
+          if (chats.length > 0) {
+            // Use the most recent chat
+            const latestChat = chats[0];
+            setChatId(latestChat._id);
+            // support both url and preview_url
+            const possibleUrl = latestChat.url || latestChat.preview_url || latestChat.url_preview || '';
+            console.log('Latest chat preview url candidate:', possibleUrl);
+            if (possibleUrl) {
+              setPreviewUrl(possibleUrl);
+            } else {
+              // fallback: try to extract URL from messages
+              const urlRegex = /(https?:\/\/[^\s]+)/i;
+              const found = latestChat.messages.map(m => m.content).join('\n').match(urlRegex);
+              if (found && found[0]) setPreviewUrl(found[0]);
+            }
+            // Filter out code-like content from messages
+            const codePatterns = [/^\s*<\/?\w+>/, /^\s*\w+\s*=\s*['"].*['"]/, /^\s*function\s+/, /^\s*\w+\s*\(/, /^\s*\d+\./, /^\s*\//, /^\s*\*/];
+            const filteredMessages = latestChat.messages.filter(msg => {
+              if (!msg.content) return false;
+              if (msg.content.includes('```')) return false;
+              return !codePatterns.some(pat => pat.test(msg.content));
+            });
+            setChatHistory(filteredMessages.map(msg => ({ role: msg.role, content: msg.content })));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch previous chats:', err);
+      }
+    }
   };
 
   const handlePromptChange = (e) => {
     setPrompt(e.target.value);
   };
 
-  const handleSendPrompt = () => {
-    if (!prompt.trim()) return;
-    // Add user prompt to chat history
-    setChatHistory(prev => [...prev, { role: 'user', content: prompt }]);
-    // Simulate assistant response (replace with real API call)
-    setTimeout(() => {
-      setChatHistory(prev => [...prev, { role: 'assistant', content: `Assistant response to: ${prompt}` }]);
-    }, 800);
-    setPrompt('');
-  };
+  // Removed duplicate handleSendPrompt, keeping the debug version below
+    const handleSendPrompt = async () => {
+      console.log('handleSendPrompt called', { prompt, selectedWorkflow, user, chatId });
+      if (!prompt.trim() || !selectedWorkflow || !user?._id) {
+        console.warn('Missing required values:', { prompt, selectedWorkflow, user });
+        return;
+      }
+      setChatHistory(prev => [...prev, { role: 'user', content: prompt }]);
+      try {
+        const token = localStorage.getItem('runcraft_token');
+        let response, data;
+        if (!chatId) {
+          // First message, create chat
+          response = await fetch(`${API_BASE_URL}/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userId: user._id,
+              workflow: selectedWorkflow,
+              message: prompt
+            })
+          });
+        } else {
+          // Subsequent messages, add to chat
+          response = await fetch(`${API_BASE_URL}/chat/${chatId}/message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              message: prompt
+            })
+          });
+        }
+        if (!response.ok) {
+          throw new Error('Failed to send message');
+        }
+        data = await response.json();
+        // Set chatId if new chat created
+        if (data && data._id) {
+          setChatId(data._id);
+        }
+        // Filter out code-like content from messages
+  if (data && Array.isArray(data.messages)) {
+          const codePatterns = [/^\s*<\/?\w+>/, /^\s*\w+\s*=\s*['"].*['"]/, /^\s*function\s+/, /^\s*\w+\s*\(/, /^\s*\d+\./, /^\s*\//, /^\s*\*/];
+          const filteredMessages = data.messages.filter(msg => {
+            if (!msg.content) return false;
+            if (msg.content.includes('```')) return false;
+            return !codePatterns.some(pat => pat.test(msg.content));
+          });
+          setChatHistory(filteredMessages.map(msg => ({ role: msg.role, content: msg.content })));
+          // set preview url if backend returned one
+          const possibleUrl = data.url || data.preview_url || data.url_preview || '';
+          console.log('API response preview url candidate:', possibleUrl);
+          if (possibleUrl) {
+            setPreviewUrl(possibleUrl);
+          } else {
+            const urlRegex = /(https?:\/\/[^\s]+)/i;
+            const found = data.messages.map(m => m.content).join('\n').match(urlRegex);
+            if (found && found[0]) setPreviewUrl(found[0]);
+          }
+        } else if (data && data.message) {
+          setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
+        }
+      } catch (err) {
+        setChatHistory(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      }
+      setPrompt('');
+    };
 
   return (
     <div style={{ 
@@ -82,8 +192,8 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
         display: 'flex',
         flexDirection: 'column',
         gap: '2rem',
-        minWidth: '16rem',
-        maxWidth: '20rem',
+  minWidth: '20rem',
+  maxWidth: '26rem',
         justifyContent: 'flex-start'
       }}>
         <div>
@@ -148,8 +258,8 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
           padding: '1rem',
           marginBottom: '1rem',
           overflowY: 'auto',
-          maxHeight: '16rem',
-          minHeight: '8rem',
+          maxHeight: '24rem',
+          minHeight: '12rem',
           display: 'flex',
           flexDirection: 'column',
           gap: '0.75rem'
@@ -183,7 +293,7 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
             id="prompt-box"
             value={prompt}
             onChange={handlePromptChange}
-            rows={4}
+            rows={3}
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -193,7 +303,8 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
               background: '#f9fafb',
               color: '#374151',
               resize: 'vertical',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              minHeight: '2.5rem'
             }}
           />
           <button
@@ -215,7 +326,7 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
         </div>
       </div>
       {/* Right Preview Panel */}
-      <PreviewPanel workflow={workflow} isGenerating={isGenerating} />
+  <PreviewPanel workflow={workflow} isGenerating={isGenerating} previewUrl={previewUrl} />
     </div>
   );
 }

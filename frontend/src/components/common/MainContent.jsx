@@ -27,7 +27,7 @@ function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeM
       case 'upload':
         return <UploadView onFileUpload={onFileUpload} user={user} workflow={workflow} isGenerating={isGenerating} onGenerateUI={onGenerateUI} />;
       case 'generateui':
-        return <GenerateUI onFileUpload={onFileUpload} isMobile={false} />;
+        return <GenerateUI onFileUpload={onFileUpload} user={user} isMobile={false} />;
       case 'workflows':
         return <WorkflowsPage workflow={workflow} user={user} />;
       case 'templates':

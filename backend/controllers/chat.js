@@ -33,7 +33,7 @@ const createChat = async (req, res) => {
     });
 
     // Step 4: Send the initial message to the n8n webhook
-    const response = await axios.post("https://n8n.jayaprakash.space/webhook-test/chat", {
+    const response = await axios.post("https://n8n.jayaprakash.space/webhook/chat", {
       sessionId: chat._id,
       message,
       n8nprompt,
@@ -98,7 +98,7 @@ const addMessage = async (req, res) => {
 
     // Step 4: Send the message to n8n webhook
     const container = chat.container;
-    const response = await axios.post("https://n8n.jayaprakash.space/webhook-test/chat", {
+    const response = await axios.post("https://n8n.jayaprakash.space/webhook/chat", {
       container,
       sessionId: chat._id,
       message,
@@ -166,9 +166,20 @@ const getChatById = async (req, res) => {
   }
 };
 
+const getUserWorkflowChats = async (req, res) => {
+  try {
+    const { userId, workflowId } = req.params;
+    const chats = await Chat.find({ userId, workflow: workflowId }).sort({ updatedAt: -1 });
+    res.json(chats);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch chats', error: error.message });
+  }
+};
+
 module.exports = {
   createChat,
   addMessage,
   getUserChats,
-  getChatById
+  getChatById,
+  getUserWorkflowChats
 };
