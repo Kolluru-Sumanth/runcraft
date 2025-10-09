@@ -10,9 +10,9 @@ const API_CONFIG = {
   }
 };
 
-const environment = process.env.NODE_ENV || 'development';
-export const API_BASE_URL = API_CONFIG[environment].baseURL;
-export const API_TIMEOUT = API_CONFIG[environment].timeout;
+const environment = import.meta.env.MODE || 'development';
+export const API_BASE_URL = API_CONFIG[environment]?.baseURL || API_CONFIG.development.baseURL;
+export const API_TIMEOUT = API_CONFIG[environment]?.timeout || API_CONFIG.development.timeout;
 
 // Helper function for making API requests
 export const apiRequest = async (endpoint, options = {}) => {

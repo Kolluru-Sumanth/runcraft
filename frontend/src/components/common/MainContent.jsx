@@ -43,7 +43,7 @@ function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeM
     }
   };
 
-  const fullWidthPages = ['upload', 'generateui', 'workflows', 'templates'];
+  const fullWidthPages = ['upload', 'generateui', 'workflows', 'templates', 'executions', 'credentials', 'settings'];
   const isFullWidth = fullWidthPages.includes(activeMenu);
 
   return (

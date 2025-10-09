@@ -322,7 +322,7 @@ function CredentialsPage({ user }) {
   }
 
   return (
-    <div>
+    <div style={{ width: '100%', maxWidth: 'none', padding: '1rem 1.5rem' }}>
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
