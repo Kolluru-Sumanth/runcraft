@@ -360,16 +360,19 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         style={{
           border: isDragOver ? '2px dashed #667eea' : '2px dashed #d1d5db',
           borderRadius: '0.75rem',
-          padding: '3rem 2rem',
+          padding: '0.75rem 0.5rem',
           backgroundColor: isDragOver ? '#f0f4ff' : '#f9fafb',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          flex: 1,
+          flex: '0 0 auto',
+          maxHeight: '150px',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          textAlign: 'center'
+          textAlign: 'center',
+          overflow: 'auto'
         }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -379,36 +382,36 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         onDrop={handleDrop}
         onClick={() => document.getElementById('workflow-upload-new').click()}
       >
-        <div style={{ color: isDragOver ? '#667eea' : '#9ca3af', marginBottom: '1rem' }}>
-          <svg style={{ margin: '0 auto', height: '4rem', width: '4rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div style={{ color: isDragOver ? '#667eea' : '#9ca3af', marginBottom: '0.5rem' }}>
+          <svg style={{ margin: '0 auto', height: '2rem', width: '2rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
         </div>
-        
+
         {isUploading ? (
           <div>
             <div style={{
-              width: '2rem',
-              height: '2rem',
+              width: '1.6rem',
+              height: '1.6rem',
               border: '2px solid #e5e7eb',
               borderTopColor: '#667eea',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
-              margin: '0 auto 1rem auto'
+              margin: '0 auto 0.5rem auto'
             }} />
-            <p style={{ fontSize: '1.125rem', fontWeight: '600', color: '#667eea', margin: '0 0 0.5rem 0' }}>
+            <p style={{ fontSize: '1rem', fontWeight: '600', color: '#667eea', margin: '0 0 0.35rem 0' }}>
               Processing...
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
+            <p style={{ fontSize: '0.725rem', color: '#6b7280', margin: 0 }}>
               Analyzing your workflow
             </p>
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: '1.25rem', fontWeight: '600', color: '#111827', margin: '0 0 0.5rem 0' }}>
+            <p style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', margin: '0 0 0.25rem 0' }}>
               Drop your workflow here
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: '0 0 1rem 0' }}>
+            <p style={{ fontSize: '0.725rem', color: '#6b7280', margin: '0 0 0.5rem 0' }}>
               or click to browse files
             </p>
             <div style={{
@@ -417,12 +420,12 @@ function UploadPanel({ onFileUpload, user, workflow }) {
               gap: '0.5rem',
               backgroundColor: '#667eea',
               color: 'white',
-              padding: '0.5rem 1rem',
+              padding: '0.35rem 0.65rem',
               borderRadius: '0.375rem',
-              fontSize: '0.875rem',
+              fontSize: '0.78rem',
               fontWeight: '500'
             }}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               Choose File
@@ -441,12 +444,12 @@ function UploadPanel({ onFileUpload, user, workflow }) {
       </div>
 
       <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem' }}>
-        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0', fontWeight: '500' }}>
-          Supported formats:
-        </p>
-        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0 }}>
-          JSON files exported from n8n workflows
-        </p>
+          <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0', fontWeight: '500' }}>
+            Supported formats:
+          </p>
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0, wordBreak: 'break-word' }}>
+            JSON files exported from n8n workflows
+          </p>
       </div>
 
       {/* Workflow Status Section */}
@@ -561,41 +564,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         </div>
       )}
 
-      {/* No Workflow Status */}
-      {!workflow && (
-        <div style={{ 
-          marginTop: '1rem', 
-          padding: '1rem', 
-          backgroundColor: '#f9fafb', 
-          borderRadius: '0.5rem',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            marginBottom: '0.5rem'
-          }}>
-            <span style={{ fontSize: '0.875rem' }}>⏳</span>
-            <h3 style={{ 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#6b7280', 
-              margin: 0 
-            }}>
-              Waiting for Upload
-            </h3>
-          </div>
-          <p style={{ 
-            fontSize: '0.7rem', 
-            color: '#9ca3af', 
-            margin: 0,
-            lineHeight: '1.3'
-          }}>
-            Upload a workflow file to see analysis results and generation options.
-          </p>
-        </div>
-      )}
+      {/* Waiting block removed as per user request */}
 
       {/* Missing Credentials Modal */}
       {showCredentialsModal && (
