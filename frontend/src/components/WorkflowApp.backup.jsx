@@ -234,7 +234,7 @@ function EnhancedSidebar({
                   margin: 0,
                   transition: 'all 0.3s ease'
                 }}>
-                  Runcraft
+                  Astraflow
                 </h1>
               </div>
             </div>
@@ -603,7 +603,7 @@ function MobileHeader({ onToggleSidebar, workflow, user, onSignOut }) {
             </svg>
           </button>
           <h1 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-            Runcraft
+            Astraflow
           </h1>
         </div>
         
@@ -885,7 +885,7 @@ function PanelContent({ workflow, onFileUpload, onGenerateUI, isGenerating, onCl
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>Runcraft</h1>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>Astraflow</h1>
               <p style={{ color: '#4b5563', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>Transform n8n workflows</p>
             </div>
             <button
@@ -908,7 +908,7 @@ function PanelContent({ workflow, onFileUpload, onGenerateUI, isGenerating, onCl
         
         {!isMobile && (
           <div style={{ marginBottom: '1rem' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', margin: '0 0 0.5rem 0' }}>Runcraft</h1>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', margin: '0 0 0.5rem 0' }}>Astraflow</h1>
             <p style={{ color: '#4b5563', fontSize: '0.875rem', margin: 0 }}>Transform n8n workflows into React applications</p>
           </div>
         )}
@@ -1210,7 +1210,7 @@ function EmptyState({ user }) {
           color: '#111827', 
           margin: '0 0 1rem 0' 
         }}>
-          Welcome to Runcraft, {user?.name || 'User'}!
+          Welcome to Astraflow, {user?.name || 'User'}!
         </h2>
         <p style={{ 
           color: '#4b5563', 
@@ -1420,6 +1420,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
     setIsSubmittingCredentials(true);
     try {
       const token = localStorage.getItem('runcraft_token');
+    const token = localStorage.getItem('astra_token');
       const backendURL = import.meta.env.DEV ? 'http://localhost:5000/api' : '/api';
       
       // Submit credentials to backend
@@ -1487,6 +1488,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
 
       // Get auth token (using correct key)
       const token = localStorage.getItem('runcraft_token');
+    const token = localStorage.getItem('astra_token');
       console.log('🔧 Debug: Token exists:', !!token);
       
       // Upload to backend with LLM analysis - explicit URL for debugging

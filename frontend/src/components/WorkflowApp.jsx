@@ -20,21 +20,21 @@ function WorkflowApp({ activeMenu: propActiveMenu }) {
   // Determine active menu from route or prop
   const getActiveMenuFromPath = () => {
     const path = location.pathname;
-    if (path.includes('/upload-workflow')) return 'upload';
-    if (path.includes('/workflows')) return 'workflows';
-    if (path.includes('/templates')) return 'templates';
-    if (path.includes('/executions')) return 'executions';
-    if (path.includes('/credentials')) return 'credentials';
-    if (path.includes('/settings')) return 'settings';
-    if (path.includes('/ui')) return 'ui';
-    return 'dashboard';
+  if (path.includes('/upload-workflow')) return 'upload';
+  if (path.includes('/workflows')) return 'workflows';
+  if (path.includes('/generate-ui')) return 'generateui';
+  if (path.includes('/templates')) return 'templates';
+  if (path.includes('/executions')) return 'executions';
+  if (path.includes('/credentials')) return 'credentials';
+  if (path.includes('/settings')) return 'settings';
+  return 'dashboard';
   };
   
   const activeMenu = propActiveMenu || getActiveMenuFromPath();
   
-  // Auto-collapse sidebar when on upload page or UI page
+  // Auto-collapse sidebar when on upload page or UI generate page
   useEffect(() => {
-    if (activeMenu === 'upload' || activeMenu === 'ui') {
+    if (activeMenu === 'upload' || activeMenu === 'generateui') {
       setIsSidebarCollapsed(true);
     }
   }, [activeMenu]);
@@ -52,11 +52,10 @@ function WorkflowApp({ activeMenu: propActiveMenu }) {
       dashboard: '/dashboard',
       upload: '/upload-workflow',
       workflows: '/workflows',
+      generateui: '/generate-ui',
       templates: '/templates',
       executions: '/executions',
       credentials: '/credentials',
-      ui: '/ui',
-      chat: '/chat',
       settings: '/settings'
     };
     navigate(routeMap[menu] || '/dashboard');

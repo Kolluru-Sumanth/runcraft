@@ -28,12 +28,11 @@ function AppContent() {
       <Route path="/dashboard" element={<WorkflowApp activeMenu="dashboard" />} />
       <Route path="/upload-workflow" element={<WorkflowApp activeMenu="upload" />} />
       <Route path="/workflows" element={<WorkflowApp activeMenu="workflows" />} />
+      <Route path="/generate-ui" element={<WorkflowApp activeMenu="generateui" />} />
       <Route path="/templates" element={<WorkflowApp activeMenu="templates" />} />
       <Route path="/executions" element={<WorkflowApp activeMenu="executions" />} />
       <Route path="/credentials" element={<WorkflowApp activeMenu="credentials" />} />
       <Route path="/settings" element={<WorkflowApp activeMenu="settings" />} />
-      <Route path="/ui" element={<WorkflowApp activeMenu="ui" />} />
-      <Route path="/chat/:id" element={<WorkflowApp activeMenu="chat" />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

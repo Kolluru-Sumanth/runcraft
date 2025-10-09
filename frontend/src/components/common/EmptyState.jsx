@@ -15,7 +15,7 @@ function EmptyState({ user }) {
           color: '#111827', 
           margin: '0 0 1rem 0' 
         }}>
-          Welcome to Runcraft, {user?.name || 'User'}!
+          Welcome to Astraflow, {user?.name || 'User'}!
         </h2>
         <p style={{ 
           color: '#4b5563', 

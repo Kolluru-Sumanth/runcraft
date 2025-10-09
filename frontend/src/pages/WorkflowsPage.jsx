@@ -230,9 +230,34 @@ function WorkflowsPage({ user }) {
                     color: '#111827', 
                     margin: 0 
                   }}>
-                    {new Date(workflow.updatedAt).toLocaleDateString()}
+                    {workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                   </p>
                 </div>
+              </div>
+              <div style={{
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                justifyContent: 'center'
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '#b91c1c' : '#166534',
+                  background: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '#fee2e2' : '#dcfce7',
+                  border: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '1px solid #fca5a5' : '1px solid #6ee7b7'
+                }}>
+                  {workflow.missingCredentials && workflow.missingCredentials.length > 0 ? 'Pending' : 'Completed'}
+                </span>
+                {workflow.missingCredentials && workflow.missingCredentials.length > 0 && (
+                  <span style={{ fontSize: '0.85rem', color: '#b91c1c', fontWeight: 500 }}>
+                    Missing: {workflow.missingCredentials.join(', ')}
+                  </span>
+                )}
               </div>
 
               <div style={{ 
