@@ -10,7 +10,7 @@ function SettingsPage({ user }) {
       notifications: true
     },
     n8n: {
-      serverUrl: process.env.REACT_APP_N8N_SERVER_URL || 'http://localhost:5678',
+      serverUrl: import.meta.env.VITE_N8N_SERVER_URL || 'http://localhost:5678',
       authMethod: 'basic',
       username: '',
       password: '',
@@ -676,7 +676,7 @@ function SettingsPage({ user }) {
   };
 
   return (
-    <div>
+    <div style={{ width: '100%', maxWidth: 'none', padding: '1rem 1.5rem' }}>
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 

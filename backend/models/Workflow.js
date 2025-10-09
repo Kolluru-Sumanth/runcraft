@@ -218,7 +218,8 @@ workflowSchema.virtual('summary').get(function() {
     triggerCount: this.triggerInfo.length,
     credentialCount: this.credentialRequirements.length,
     credentialsConfigured: this.credentialRequirements.filter(c => c.isConfigured).length,
-    lastUpdated: this.updatedAt
+    lastUpdated: this.updatedAt,
+    createdAt: this.createdAt || this.created
   };
 });
 

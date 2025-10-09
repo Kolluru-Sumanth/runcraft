@@ -11,6 +11,7 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isThinking, setIsThinking] = useState(false);
 
   useEffect(() => {
     const fetchWorkflows = async () => {
@@ -108,7 +109,8 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
         console.warn('Missing required values:', { prompt, selectedWorkflow, user });
         return;
       }
-      setChatHistory(prev => [...prev, { role: 'user', content: prompt }]);
+        setChatHistory(prev => [...prev, { role: 'user', content: prompt }]);
+        setIsThinking(true);
       try {
         const token = localStorage.getItem('runcraft_token');
         let response, data;
@@ -171,6 +173,9 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
         }
       } catch (err) {
         setChatHistory(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      }
+      finally {
+        setIsThinking(false);
       }
       setPrompt('');
     };
@@ -306,9 +311,11 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
               marginBottom: '1rem',
               minHeight: '2.5rem'
             }}
+            disabled={isThinking}
           />
           <button
             onClick={handleSendPrompt}
+            disabled={isThinking}
             style={{
               padding: '0.75rem 1.5rem',
               background: '#667eea',
@@ -321,7 +328,17 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
               boxShadow: '0 2px 8px rgba(102,126,234,0.08)'
             }}
           >
-            Send Prompt
+            {isThinking ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
+                  <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" strokeOpacity="0.4" />
+                  <path d="M22 12a10 10 0 00-10-10" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                Thinking...
+              </span>
+            ) : (
+              'Send Prompt'
+            )}
           </button>
         </div>
       </div>

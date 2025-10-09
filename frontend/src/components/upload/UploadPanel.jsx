@@ -167,7 +167,11 @@ function UploadPanel({ onFileUpload, user, workflow }) {
 
   const handleProceedWithoutCredentials = () => {
     handleCredentialsModalClose();
-    alert('ℹ️ Workflow uploaded successfully! You can configure the missing credentials in your n8n server and then deploy the workflow.');
+    // Include backend status key if available to make message consistent
+  const isActive = currentWorkflow?.isActive ?? workflow?.isActive ?? false;
+  const statusKey = currentWorkflow?.status || workflow?.status || 'uploaded';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_pending' ? 'Credentials required' : (statusKey === 'ready_to_deploy' ? 'Ready to deploy' : 'Uploaded'));
+    alert(`ℹ️ Workflow uploaded successfully! [${friendly} — ${statusKey}] You can configure the missing credentials in your n8n server and then deploy the workflow.`);
   };
 
   const handleFileUpload = async (file) => {
@@ -255,10 +259,16 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         showMissingCredentialsModal(result.data.missingCredentials, workflowWithAnalysis);
       } else if (result.data.deployment?.deployed) {
         // Show success message for deployed workflow
-        alert(`✅ Workflow uploaded and deployed successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'}`);
+  const isActive = result.data.workflow?.isActive || false;
+  const statusKey = result.data.workflow?.status || 'ready_to_deploy';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_pending' ? 'Credentials required' : (statusKey === 'ready_to_deploy' ? 'Ready to deploy' : 'Deployed'));
+        alert(`✅ Workflow uploaded and deployed successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} [${friendly} — ${statusKey}]`);
       } else {
         // Show success message for upload only
-        alert(`✅ Workflow uploaded successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} ${result.data.deployment?.reason === 'credentials_missing' ? 'Deployment skipped due to missing credentials.' : ''}`);
+  const isActive = result.data.workflow?.isActive || false;
+  const statusKey = result.data.workflow?.status || result.data.deployment?.reason || 'uploaded';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_missing' || statusKey === 'credentials_pending' ? 'Deployment skipped (credentials missing)' : 'Uploaded');
+        alert(`✅ Workflow uploaded successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} [${friendly} — ${statusKey}] ${result.data.deployment?.reason === 'credentials_missing' ? 'Deployment skipped due to missing credentials.' : ''}`);
       }
 
     } catch (error) {
@@ -360,16 +370,19 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         style={{
           border: isDragOver ? '2px dashed #667eea' : '2px dashed #d1d5db',
           borderRadius: '0.75rem',
-          padding: '3rem 2rem',
+          padding: '0.75rem 0.5rem',
           backgroundColor: isDragOver ? '#f0f4ff' : '#f9fafb',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          flex: 1,
+          flex: '0 0 auto',
+          maxHeight: '150px',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          textAlign: 'center'
+          textAlign: 'center',
+          overflow: 'auto'
         }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -379,36 +392,36 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         onDrop={handleDrop}
         onClick={() => document.getElementById('workflow-upload-new').click()}
       >
-        <div style={{ color: isDragOver ? '#667eea' : '#9ca3af', marginBottom: '1rem' }}>
-          <svg style={{ margin: '0 auto', height: '4rem', width: '4rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div style={{ color: isDragOver ? '#667eea' : '#9ca3af', marginBottom: '0.5rem' }}>
+          <svg style={{ margin: '0 auto', height: '2rem', width: '2rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
         </div>
-        
+
         {isUploading ? (
           <div>
             <div style={{
-              width: '2rem',
-              height: '2rem',
+              width: '1.6rem',
+              height: '1.6rem',
               border: '2px solid #e5e7eb',
               borderTopColor: '#667eea',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
-              margin: '0 auto 1rem auto'
+              margin: '0 auto 0.5rem auto'
             }} />
-            <p style={{ fontSize: '1.125rem', fontWeight: '600', color: '#667eea', margin: '0 0 0.5rem 0' }}>
+            <p style={{ fontSize: '1rem', fontWeight: '600', color: '#667eea', margin: '0 0 0.35rem 0' }}>
               Processing...
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
+            <p style={{ fontSize: '0.725rem', color: '#6b7280', margin: 0 }}>
               Analyzing your workflow
             </p>
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: '1.25rem', fontWeight: '600', color: '#111827', margin: '0 0 0.5rem 0' }}>
+            <p style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', margin: '0 0 0.25rem 0' }}>
               Drop your workflow here
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: '0 0 1rem 0' }}>
+            <p style={{ fontSize: '0.725rem', color: '#6b7280', margin: '0 0 0.5rem 0' }}>
               or click to browse files
             </p>
             <div style={{
@@ -417,12 +430,12 @@ function UploadPanel({ onFileUpload, user, workflow }) {
               gap: '0.5rem',
               backgroundColor: '#667eea',
               color: 'white',
-              padding: '0.5rem 1rem',
+              padding: '0.35rem 0.65rem',
               borderRadius: '0.375rem',
-              fontSize: '0.875rem',
+              fontSize: '0.78rem',
               fontWeight: '500'
             }}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               Choose File
@@ -441,12 +454,12 @@ function UploadPanel({ onFileUpload, user, workflow }) {
       </div>
 
       <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem' }}>
-        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0', fontWeight: '500' }}>
-          Supported formats:
-        </p>
-        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0 }}>
-          JSON files exported from n8n workflows
-        </p>
+          <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0', fontWeight: '500' }}>
+            Supported formats:
+          </p>
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0, wordBreak: 'break-word' }}>
+            JSON files exported from n8n workflows
+          </p>
       </div>
 
       {/* Workflow Status Section */}
@@ -477,21 +490,38 @@ function UploadPanel({ onFileUpload, user, workflow }) {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.25rem'
+              gap: '0.5rem'
             }}>
-              <div style={{ 
-                width: '0.5rem', 
-                height: '0.5rem', 
-                backgroundColor: '#10b981', 
-                borderRadius: '50%' 
-              }} />
-              <span style={{ 
-                fontSize: '0.75rem', 
-                color: '#10b981', 
-                fontWeight: '500' 
-              }}>
-                Ready
-              </span>
+              {/* Show simple Active / Inactive state based on isActive */}
+                      {(() => {
+                        const isActive = !!workflow?.isActive;
+                        const info = isActive
+                          ? { label: 'Active', color: '#10b981', bg: '#dcfce7' }
+                          : { label: 'Inactive', color: '#6b7280', bg: '#f3f4f6' };
+                        return (
+                          <>
+                            <div style={{ 
+                              width: '0.55rem', 
+                              height: '0.55rem', 
+                              backgroundColor: info.color, 
+                              borderRadius: '50%' 
+                            }} />
+                            <span style={{ 
+                              fontSize: '0.75rem', 
+                              color: info.color, 
+                              fontWeight: '600',
+                              backgroundColor: info.bg,
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '0.375rem'
+                            }}>
+                              {info.label}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', marginLeft: '0.5rem' }}>
+                      ({statusKey})
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -561,41 +591,7 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         </div>
       )}
 
-      {/* No Workflow Status */}
-      {!workflow && (
-        <div style={{ 
-          marginTop: '1rem', 
-          padding: '1rem', 
-          backgroundColor: '#f9fafb', 
-          borderRadius: '0.5rem',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            marginBottom: '0.5rem'
-          }}>
-            <span style={{ fontSize: '0.875rem' }}>⏳</span>
-            <h3 style={{ 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#6b7280', 
-              margin: 0 
-            }}>
-              Waiting for Upload
-            </h3>
-          </div>
-          <p style={{ 
-            fontSize: '0.7rem', 
-            color: '#9ca3af', 
-            margin: 0,
-            lineHeight: '1.3'
-          }}>
-            Upload a workflow file to see analysis results and generation options.
-          </p>
-        </div>
-      )}
+      {/* Waiting block removed as per user request */}
 
       {/* Missing Credentials Modal */}
       {showCredentialsModal && (

@@ -37,29 +37,47 @@ function TemplatesPage({ user }) {
   ];
 
   return (
-    <div>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ 
-          fontSize: '2rem', 
-          fontWeight: '700', 
-          color: '#111827', 
-          margin: '0 0 0.5rem 0' 
+  <div style={{ width: '100%', maxWidth: 'none', padding: '1rem 1.5rem' }}>
+      <div style={{ 
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2rem'
+      }}>
+        <div>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            fontWeight: '700', 
+            color: '#111827', 
+            margin: '0 0 0.5rem 0' 
+          }}>
+            Workflow Templates
+          </h1>
+          <p style={{ 
+            color: '#6b7280', 
+            fontSize: '1rem', 
+            margin: 0 
+          }}>
+            Pre-built workflow templates to get you started quickly
+          </p>
+        </div>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '0.5rem 1rem',
+          backgroundColor: '#f3f4f6',
+          borderRadius: '0.5rem',
+          fontSize: '0.875rem',
+          color: '#6b7280'
         }}>
-          Workflow Templates
-        </h1>
-        <p style={{ 
-          color: '#6b7280', 
-          fontSize: '1rem', 
-          margin: 0 
-        }}>
-          Pre-built workflow templates to get you started quickly
-        </p>
+          {templates.length} template{templates.length !== 1 ? 's' : ''}
+        </div>
       </div>
 
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
-        gap: '1.5rem' 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
+        gap: '2rem' 
       }}>
         {templates.map((template) => (
           <div 
@@ -68,7 +86,7 @@ function TemplatesPage({ user }) {
               backgroundColor: '#ffffff',
               borderRadius: '0.75rem',
               border: '1px solid #e5e7eb',
-              padding: '1.5rem',
+              padding: '2rem',
               transition: 'all 0.2s ease',
               cursor: 'pointer'
             }}

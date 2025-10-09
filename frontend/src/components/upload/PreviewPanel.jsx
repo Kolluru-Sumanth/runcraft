@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 // Empty State Component
-function EmptyState() {
+function EmptyState({ mode = 'generated' }) {
   return (
     <div style={{
       flex: 1,
@@ -16,59 +16,89 @@ function EmptyState() {
       justifyContent: 'center',
       textAlign: 'center'
     }}>
-      <div style={{ color: '#d1d5db', marginBottom: '0.25rem' }}>
-        <svg style={{ margin: '0 auto', height: '4rem', width: '4rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M3 7h18M3 12h18M3 17h18" />
-        </svg>
-      </div>
-      <h3 style={{ 
-        fontSize: '1.25rem', 
-        fontWeight: '600', 
-        color: '#111827', 
-        margin: 0
-      }}>
-        Generated UI Preview
-      </h3>
-      <p style={{ 
-        color: '#6b7280', 
-        fontSize: '0.95rem', 
-        maxWidth: '36rem',
-        margin: 0
-      }}>
-        Select a workflow on the left and send a prompt to generate a live UI preview here. The preview may be produced from the workflow's latest chat response or an AI-generated preview URL.
-      </p>
+      {mode === 'generated' ? (
+        <>
+          {(() => { try { console.log('PreviewPanel: rendering EmptyState mode=generated'); } catch(e){}; return null; })()}
+          <div style={{ color: '#d1d5db', marginBottom: '0.25rem' }}>
+            <svg style={{ margin: '0 auto', height: '4rem', width: '4rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M3 7h18M3 12h18M3 17h18" />
+            </svg>
+          </div>
+          <h3 style={{ 
+            fontSize: '1.25rem', 
+            fontWeight: '600', 
+            color: '#111827', 
+            margin: 0
+          }}>
+            Generated UI Preview
+          </h3>
+          <p style={{ 
+            color: '#6b7280', 
+            fontSize: '0.95rem', 
+            maxWidth: '36rem',
+            margin: 0
+          }}>
+            Select a workflow on the left and send a prompt to generate a live UI preview here. The preview may be produced from the workflow's latest chat response or an AI-generated preview URL.
+          </p>
 
-      {/* Small illustrative mock preview to make the empty state feel relevant to UI generation */}
-      <div style={{
-        width: '72%',
-        maxWidth: '640px',
-        minHeight: '160px',
-        borderRadius: '0.5rem',
-        border: '1px dashed #e5e7eb',
-        background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        padding: '1rem',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <div style={{ height: '10px', width: '22%', backgroundColor: '#eef2ff', borderRadius: '6px' }} />
-          <div style={{ height: '8px', width: '18%', backgroundColor: '#eef2ff', borderRadius: '6px' }} />
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flex: 1 }}>
-          <div style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: '0.5rem', padding: '0.75rem', border: '1px solid #e6eefc' }}>
-            <div style={{ height: '10px', width: '60%', backgroundColor: '#eef2ff', borderRadius: '6px', marginBottom: '0.5rem' }} />
-            <div style={{ height: '10px', width: '90%', backgroundColor: '#f1f5f9', borderRadius: '6px', marginBottom: '0.5rem' }} />
-            <div style={{ height: '10px', width: '75%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
+          {/* Small illustrative mock preview to make the empty state feel relevant to UI generation */}
+          <div style={{
+            width: '72%',
+            maxWidth: '640px',
+            minHeight: '160px',
+            borderRadius: '0.5rem',
+            border: '1px dashed #e5e7eb',
+            background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            padding: '1rem',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ height: '10px', width: '22%', backgroundColor: '#eef2ff', borderRadius: '6px' }} />
+              <div style={{ height: '8px', width: '18%', backgroundColor: '#eef2ff', borderRadius: '6px' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', flex: 1 }}>
+              <div style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: '0.5rem', padding: '0.75rem', border: '1px solid #e6eefc' }}>
+                <div style={{ height: '10px', width: '60%', backgroundColor: '#eef2ff', borderRadius: '6px', marginBottom: '0.5rem' }} />
+                <div style={{ height: '10px', width: '90%', backgroundColor: '#f1f5f9', borderRadius: '6px', marginBottom: '0.5rem' }} />
+                <div style={{ height: '10px', width: '75%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
+              </div>
+              <div style={{ width: '140px', backgroundColor: '#fff', borderRadius: '0.5rem', border: '1px solid #eef2ff', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ height: '34px', width: '34px', borderRadius: '6px', backgroundColor: '#eef2ff' }} />
+                <div style={{ height: '10px', width: '80%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
+                <div style={{ height: '8px', width: '60%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
+              </div>
+            </div>
           </div>
-          <div style={{ width: '140px', backgroundColor: '#fff', borderRadius: '0.5rem', border: '1px solid #eef2ff', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ height: '34px', width: '34px', borderRadius: '6px', backgroundColor: '#eef2ff' }} />
-            <div style={{ height: '10px', width: '80%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
-            <div style={{ height: '8px', width: '60%', backgroundColor: '#f1f5f9', borderRadius: '6px' }} />
+        </>
+      ) : (
+        // analysis mode: original workflow analysis empty copy
+        <>
+          {(() => { try { console.log('PreviewPanel: rendering EmptyState mode=analysis'); } catch(e){}; return null; })()}
+          <div style={{ color: '#d1d5db', marginBottom: '1.5rem' }}>
+            <svg style={{ margin: '0 auto', height: '5rem', width: '5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
           </div>
-        </div>
-      </div>
+          <h3 style={{ 
+            fontSize: '1.5rem', 
+            fontWeight: '600', 
+            color: '#9ca3af', 
+            margin: '0 0 1rem 0' 
+          }}>
+            Workflow Analysis
+          </h3>
+          <p style={{ 
+            color: '#9ca3af', 
+            fontSize: '1rem', 
+            maxWidth: '24rem' 
+          }}>
+            Upload a workflow to see AI-powered analysis, webhook URLs, and intelligent insights about your n8n workflow.
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -583,8 +613,13 @@ function InsightsTab({ llmAnalysis, workflow }) {
 }
 
 // Main Preview Panel Component
-function PreviewPanel({ workflow, isGenerating, previewUrl }) {
+function PreviewPanel({ workflow, isGenerating, previewUrl, emptyMode = 'generated' }) {
   const [activeTab, setActiveTab] = useState('analysis');
+  // Debug logs to help track which empty state is used
+  try {
+    // eslint-disable-next-line no-console
+    console.log('PreviewPanel props -> workflow:', workflow, 'previewUrl:', previewUrl, 'emptyMode:', emptyMode, 'isGenerating:', isGenerating);
+  } catch (e) {}
 
   if (!workflow) {
     // If there's no workflow but a previewUrl was provided, show the preview iframe
@@ -605,13 +640,13 @@ function PreviewPanel({ workflow, isGenerating, previewUrl }) {
             <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>Preview</div>
             <a href={previewUrl} target="_blank" rel="noreferrer" style={{ color: '#667eea', fontSize: '0.85rem' }}>Open in new tab</a>
           </div>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', height: '360px' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', height: '65vh', minHeight: '420px' }}>
             <iframe src={previewUrl} title="Generated UI Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
           </div>
         </div>
       </div>
     ) : (
-      <EmptyState />
+      <EmptyState mode={emptyMode} />
     );
   }
 
@@ -713,7 +748,7 @@ function PreviewPanel({ workflow, isGenerating, previewUrl }) {
             <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>Preview</div>
             <a href={previewUrl} target="_blank" rel="noreferrer" style={{ color: '#667eea', fontSize: '0.85rem' }}>Open in new tab</a>
           </div>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', height: '360px' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', overflow: 'hidden', height: '65vh', minHeight: '420px' }}>
             <iframe src={previewUrl} title="Generated UI Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
           </div>
         </div>

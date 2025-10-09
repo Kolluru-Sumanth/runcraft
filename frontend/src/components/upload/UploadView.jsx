@@ -13,8 +13,8 @@ function UploadView({ onFileUpload, user, workflow, isGenerating, onGenerateUI }
       {/* Left Upload Panel */}
       <UploadPanel onFileUpload={onFileUpload} user={user} workflow={workflow} />
       
-      {/* Right Preview Panel */}
-      <PreviewPanel workflow={workflow} isGenerating={isGenerating} />
+  {/* Right Preview Panel */}
+  <PreviewPanel workflow={workflow} isGenerating={isGenerating} emptyMode="analysis" />
     </div>
   );
 }
