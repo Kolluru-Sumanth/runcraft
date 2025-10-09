@@ -21,13 +21,21 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
-app.use('/api/', limiter);
+// CORS configuration - ensure this runs before other middleware that may short-circuit (like rate limiter)
+const corsOptions = process.env.NODE_ENV === 'development'
+  ? { origin: true, credentials: true, methods: ['GET','POST','PUT','DELETE','OPTIONS'] }
+  : { origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true, methods: ['GET','POST','PUT','DELETE','OPTIONS'] };
+app.use(cors(corsOptions));
 
-// CORS configuration
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
-}));
+// Rate limiting (applied after CORS so preflight isn't blocked)
+// Skip rate limiting for OPTIONS preflight requests to avoid blocking CORS preflight
+const limiterWithSkip = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests from this IP, please try again later.',
+  skip: (req) => req.method === 'OPTIONS'
+});
+app.use('/api/', limiterWithSkip);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

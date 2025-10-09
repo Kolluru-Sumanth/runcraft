@@ -5,6 +5,9 @@ function WorkflowsPage({ user }) {
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsWorkflow, setDetailsWorkflow] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
     const fetchWorkflows = async () => {
@@ -140,7 +143,7 @@ function WorkflowsPage({ user }) {
         }}>
           {Array.isArray(workflows) && workflows.map((workflow) => (
             <div 
-              key={workflow._id}
+              key={workflow.id || workflow._id}
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '0.75rem',
@@ -176,18 +179,25 @@ function WorkflowsPage({ user }) {
                 }}>
                   {workflow.name}
                 </h3>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  backgroundColor: workflow.status === 'active' ? '#dcfce7' : 
-                                   workflow.status === 'deployed' ? '#dbeafe' : '#fef3c7',
-                  color: workflow.status === 'active' ? '#166534' : 
-                         workflow.status === 'deployed' ? '#1e40af' : '#92400e',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.75rem',
-                  fontWeight: '500'
-                }}>
-                  {workflow.status}
-                </span>
+                {(() => {
+                  // Prefer isActive boolean to show Active/Inactive across the app
+                  const isActive = !!workflow.isActive;
+                  const info = isActive
+                    ? { bg: '#dcfce7', color: '#166534', label: 'Active' }
+                    : { bg: '#f3f4f6', color: '#6b7280', label: 'Inactive' };
+                  return (
+                    <span style={{
+                      padding: '0.25rem 0.5rem',
+                      backgroundColor: info.bg,
+                      color: info.color,
+                      borderRadius: '0.375rem',
+                      fontSize: '0.75rem',
+                      fontWeight: '500'
+                    }}>
+                      {info.label}
+                    </span>
+                  );
+                })()}
               </div>
 
               <div style={{ 
@@ -204,7 +214,7 @@ function WorkflowsPage({ user }) {
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em'
                   }}>
-                    Nodes
+                    Triggers
                   </p>
                   <p style={{ 
                     fontSize: '1.25rem', 
@@ -212,7 +222,7 @@ function WorkflowsPage({ user }) {
                     color: '#111827', 
                     margin: 0 
                   }}>
-                    {workflow.nodeCount}
+                    {workflow.triggerCount ?? workflow.nodeCount ?? 0}
                   </p>
                 </div>
                 <div>
@@ -223,42 +233,18 @@ function WorkflowsPage({ user }) {
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em'
                   }}>
-                    Updated
+                    Created
                   </p>
                   <p style={{ 
                     fontSize: '0.875rem', 
                     color: '#111827', 
                     margin: 0 
                   }}>
-                    {workflow.updatedAt ? new Date(workflow.updatedAt).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    {workflow.createdAt ? new Date(workflow.createdAt).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (workflow.created ? new Date(workflow.created).toLocaleString() : 'N/A')}
                   </p>
                 </div>
               </div>
-              <div style={{
-                marginBottom: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                justifyContent: 'center'
-              }}>
-                <span style={{
-                  display: 'inline-block',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '#b91c1c' : '#166534',
-                  background: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '#fee2e2' : '#dcfce7',
-                  border: workflow.missingCredentials && workflow.missingCredentials.length > 0 ? '1px solid #fca5a5' : '1px solid #6ee7b7'
-                }}>
-                  {workflow.missingCredentials && workflow.missingCredentials.length > 0 ? 'Pending' : 'Completed'}
-                </span>
-                {workflow.missingCredentials && workflow.missingCredentials.length > 0 && (
-                  <span style={{ fontSize: '0.85rem', color: '#b91c1c', fontWeight: 500 }}>
-                    Missing: {workflow.missingCredentials.join(', ')}
-                  </span>
-                )}
-              </div>
+              {/* credential badge removed here to avoid duplicate status display; top-right badge now drives the status UI */}
 
               <div style={{ 
                 display: 'flex', 
@@ -266,17 +252,42 @@ function WorkflowsPage({ user }) {
                 paddingTop: '1rem',
                 borderTop: '1px solid #e5e7eb'
               }}>
-                <button style={{
-                  flex: 1,
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  cursor: 'pointer'
-                }}>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    // Fetch workflow details from API
+                    try {
+                      setDetailsLoading(true);
+                      setDetailsOpen(true);
+                      const token = localStorage.getItem('runcraft_token');
+                      const resp = await fetch(`${API_BASE_URL}/workflows/${workflow.id || workflow._id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      if (!resp.ok) {
+                        throw new Error('Failed to fetch workflow details');
+                      }
+                      const data = await resp.json();
+                      setDetailsWorkflow(data.data?.workflow || data.workflow || data);
+                    } catch (err) {
+                      console.error('Error fetching workflow details:', err);
+                      setDetailsWorkflow({ error: err.message });
+                    } finally {
+                      setDetailsLoading(false);
+                    }
+                  }
+                  }
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
                   View Details
                 </button>
                 <button style={{
@@ -296,8 +307,111 @@ function WorkflowsPage({ user }) {
           ))}
         </div>
       )}
+      {/* Slide-out details panel */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        height: '100%',
+        width: detailsOpen ? '480px' : '0px',
+        backgroundColor: '#ffffff',
+        boxShadow: detailsOpen ? '-24px 0 40px rgba(2,6,23,0.2)' : 'none',
+        overflow: 'hidden',
+        transition: 'width 300ms ease',
+        zIndex: 1000
+      }}>
+        <div style={{ width: '100%', height: '100%', display: detailsOpen ? 'block' : 'none' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+            <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Workflow Details</h3>
+            <button onClick={() => { setDetailsOpen(false); setDetailsWorkflow(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}>✕</button>
+          </div>
+          <div style={{ padding: '1rem', overflowY: 'auto', height: 'calc(100% - 64px)' }}>
+            {detailsLoading ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>Loading...</div>
+            ) : detailsWorkflow ? (
+              detailsWorkflow.error ? (
+                <div style={{ color: '#dc2626' }}>Error: {detailsWorkflow.error}</div>
+              ) : (
+                <div style={{ fontSize: '0.95rem', color: '#111827', lineHeight: 1.5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+                    <div>
+                      <div style={{ fontSize: '1.125rem', fontWeight: 600 }}>{detailsWorkflow.name}</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{detailsWorkflow._id || detailsWorkflow.id}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ padding: '0.25rem 0.5rem', borderRadius: '0.375rem', background: detailsWorkflow.isActive ? '#dcfce7' : '#f3f4f6', color: detailsWorkflow.isActive ? '#166534' : '#6b7280', fontWeight: 600 }}>{detailsWorkflow.isActive ? 'Active' : 'Inactive'}</span>
+                        <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{detailsWorkflow.status.replace('_',' ')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div style={{ color: '#6b7280' }}>Created</div>
+                    <div style={{ color: '#111827', textAlign: 'right' }}>{detailsWorkflow.createdAt ? new Date(detailsWorkflow.createdAt).toLocaleString() : (detailsWorkflow.created ? new Date(detailsWorkflow.created).toLocaleString() : 'N/A')}</div>
+                  </div>
+
+                  <hr style={{ margin: '1rem 0', borderColor: '#eef2f7' }} />
+
+                  <h4 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Credentials</h4>
+                  {Array.isArray(detailsWorkflow.credentialRequirements) && detailsWorkflow.credentialRequirements.length > 0 ? (
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                      {detailsWorkflow.credentialRequirements.map((c, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: '#fbfbfd', borderRadius: '0.375rem', border: '1px solid #f3f4f6' }}>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{c.nodeName}</div>
+                            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{c.credentialType}</div>
+                          </div>
+                          <div>
+                            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '0.375rem', background: c.isConfigured ? '#dcfce7' : '#fee2e2', color: c.isConfigured ? '#166534' : '#b91c1c', fontWeight: 600 }}>{c.isConfigured ? 'Configured' : 'Missing'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (<p style={{ color: '#6b7280' }}>No credential requirements found.</p>)}
+
+                  <h4 style={{ marginTop: '1rem' }}>Triggers</h4>
+                  {Array.isArray(detailsWorkflow.triggerInfo) && detailsWorkflow.triggerInfo.length > 0 ? (
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                      {detailsWorkflow.triggerInfo.map((t, i) => (
+                        <div key={i} style={{ padding: '0.5rem', borderRadius: '0.375rem', background: '#fbfbfd', border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{t.nodeName}</div>
+                            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{t.type}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <a href={t.webhookUrl || t.testUrl || '#'} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.9rem' }}>{t.webhookUrl ? 'Open' : (t.testUrl ? 'Test' : 'N/A')}</a>
+                            <button onClick={() => { navigator.clipboard?.writeText(t.webhookUrl || t.testUrl || ''); }} style={{ padding: '0.25rem 0.5rem', background: '#f3f4f6', border: 'none', borderRadius: '0.375rem', cursor: 'pointer' }}>Copy</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (<p style={{ color: '#6b7280' }}>No triggers detected.</p>)}
+
+                  <h4 style={{ marginTop: '1rem' }}>Deployment History</h4>
+                  {Array.isArray(detailsWorkflow.deploymentHistory) && detailsWorkflow.deploymentHistory.length > 0 ? (
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                      {detailsWorkflow.deploymentHistory.map((h, i) => (
+                        <div key={i} style={{ padding: '0.5rem', borderRadius: '0.375rem', background: '#ffffff', border: '1px solid #f3f4f6' }}>
+                          <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{new Date(h.timestamp).toLocaleString()}</div>
+                          <div style={{ fontWeight: 600 }}>{h.action}</div>
+                          <div style={{ color: '#374151' }}>{h.details}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (<p style={{ color: '#6b7280' }}>No deployment history yet.</p>)}
+                </div>
+              )
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>No workflow selected</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default WorkflowsPage;
+
+// Slide-out details panel styles and component are rendered by WorkflowsPage via state

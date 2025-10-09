@@ -257,17 +257,9 @@ function WorkflowManager({ onClose }) {
 }
 
 function WorkflowCard({ workflow, onDeploy, onActivate, onDeactivate, onViewDetails }) {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return { bg: '#dcfce7', text: '#166534' };
-      case 'deployed': return { bg: '#dbeafe', text: '#1d4ed8' };
-      case 'ready_to_deploy': return { bg: '#fef3c7', text: '#92400e' };
-      case 'credentials_pending': return { bg: '#fed7d7', text: '#c53030' };
-      default: return { bg: '#f3f4f6', text: '#374151' };
-    }
-  };
-
-  const statusColors = getStatusColor(workflow.status);
+  // Use isActive to show Active/Inactive consistently
+  const isActive = !!workflow.isActive;
+  const statusColors = isActive ? { bg: '#dcfce7', text: '#166534' } : { bg: '#f3f4f6', text: '#374151' };
 
   return (
     <div style={{
@@ -297,27 +289,13 @@ function WorkflowCard({ workflow, onDeploy, onActivate, onDeactivate, onViewDeta
               backgroundColor: statusColors.bg,
               color: statusColors.text
             }}>
-              {workflow.status.replace('_', ' ')}
+              {isActive ? 'Active' : 'Inactive'}
             </span>
-            {workflow.isActive && (
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '0.125rem 0.5rem',
-                borderRadius: '9999px',
-                fontSize: '0.75rem',
-                fontWeight: '500',
-                backgroundColor: '#dcfce7',
-                color: '#166534'
-              }}>
-                🟢 Active
-              </span>
-            )}
           </div>
         </div>
         
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {workflow.status === 'ready_to_deploy' && (
+          {(!workflow.credentialsConfigured || workflow.credentialsConfigured < workflow.credentialCount) ? null : (!isActive && (
             <button
               onClick={() => onDeploy(workflow.id)}
               style={{
@@ -332,9 +310,9 @@ function WorkflowCard({ workflow, onDeploy, onActivate, onDeactivate, onViewDeta
             >
               Deploy
             </button>
-          )}
+          ))}
           
-          {workflow.status === 'deployed' && !workflow.isActive && (
+          {(!isActive && workflow.n8nWorkflowId && (workflow.credentialsConfigured >= workflow.credentialCount)) && (
             <button
               onClick={() => onActivate(workflow.id)}
               style={{

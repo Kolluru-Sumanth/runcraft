@@ -167,7 +167,11 @@ function UploadPanel({ onFileUpload, user, workflow }) {
 
   const handleProceedWithoutCredentials = () => {
     handleCredentialsModalClose();
-    alert('ℹ️ Workflow uploaded successfully! You can configure the missing credentials in your n8n server and then deploy the workflow.');
+    // Include backend status key if available to make message consistent
+  const isActive = currentWorkflow?.isActive ?? workflow?.isActive ?? false;
+  const statusKey = currentWorkflow?.status || workflow?.status || 'uploaded';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_pending' ? 'Credentials required' : (statusKey === 'ready_to_deploy' ? 'Ready to deploy' : 'Uploaded'));
+    alert(`ℹ️ Workflow uploaded successfully! [${friendly} — ${statusKey}] You can configure the missing credentials in your n8n server and then deploy the workflow.`);
   };
 
   const handleFileUpload = async (file) => {
@@ -255,10 +259,16 @@ function UploadPanel({ onFileUpload, user, workflow }) {
         showMissingCredentialsModal(result.data.missingCredentials, workflowWithAnalysis);
       } else if (result.data.deployment?.deployed) {
         // Show success message for deployed workflow
-        alert(`✅ Workflow uploaded and deployed successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'}`);
+  const isActive = result.data.workflow?.isActive || false;
+  const statusKey = result.data.workflow?.status || 'ready_to_deploy';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_pending' ? 'Credentials required' : (statusKey === 'ready_to_deploy' ? 'Ready to deploy' : 'Deployed'));
+        alert(`✅ Workflow uploaded and deployed successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} [${friendly} — ${statusKey}]`);
       } else {
         // Show success message for upload only
-        alert(`✅ Workflow uploaded successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} ${result.data.deployment?.reason === 'credentials_missing' ? 'Deployment skipped due to missing credentials.' : ''}`);
+  const isActive = result.data.workflow?.isActive || false;
+  const statusKey = result.data.workflow?.status || result.data.deployment?.reason || 'uploaded';
+  const friendly = isActive ? 'Active' : (statusKey === 'credentials_missing' || statusKey === 'credentials_pending' ? 'Deployment skipped (credentials missing)' : 'Uploaded');
+        alert(`✅ Workflow uploaded successfully! ${result.data.llmAnalysis ? 'AI analysis completed.' : 'Basic analysis completed.'} [${friendly} — ${statusKey}] ${result.data.deployment?.reason === 'credentials_missing' ? 'Deployment skipped due to missing credentials.' : ''}`);
       }
 
     } catch (error) {
@@ -480,21 +490,38 @@ function UploadPanel({ onFileUpload, user, workflow }) {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.25rem'
+              gap: '0.5rem'
             }}>
-              <div style={{ 
-                width: '0.5rem', 
-                height: '0.5rem', 
-                backgroundColor: '#10b981', 
-                borderRadius: '50%' 
-              }} />
-              <span style={{ 
-                fontSize: '0.75rem', 
-                color: '#10b981', 
-                fontWeight: '500' 
-              }}>
-                Ready
-              </span>
+              {/* Show simple Active / Inactive state based on isActive */}
+                      {(() => {
+                        const isActive = !!workflow?.isActive;
+                        const info = isActive
+                          ? { label: 'Active', color: '#10b981', bg: '#dcfce7' }
+                          : { label: 'Inactive', color: '#6b7280', bg: '#f3f4f6' };
+                        return (
+                          <>
+                            <div style={{ 
+                              width: '0.55rem', 
+                              height: '0.55rem', 
+                              backgroundColor: info.color, 
+                              borderRadius: '50%' 
+                            }} />
+                            <span style={{ 
+                              fontSize: '0.75rem', 
+                              color: info.color, 
+                              fontWeight: '600',
+                              backgroundColor: info.bg,
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '0.375rem'
+                            }}>
+                              {info.label}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', marginLeft: '0.5rem' }}>
+                      ({statusKey})
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

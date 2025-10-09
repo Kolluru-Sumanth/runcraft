@@ -43,21 +43,24 @@ function MainContent({ workflow, isGenerating, user, isSidebarCollapsed, activeM
     }
   };
 
+  const fullWidthPages = ['upload', 'generateui', 'workflows', 'templates'];
+  const isFullWidth = fullWidthPages.includes(activeMenu);
+
   return (
     <div style={{ 
       flex: 1, 
       display: 'flex', 
       flexDirection: 'column',
       paddingTop: '0',
-      marginLeft: isSidebarCollapsed ? '0' : '0',
       transition: 'margin-left 0.3s ease'
     }} className="main-content">
       <div style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ 
-          maxWidth: (activeMenu === 'upload' || activeMenu === 'generateui') ? 'none' : '64rem',
-          margin: '0 auto',
-          padding: (activeMenu === 'upload' || activeMenu === 'generateui') ? '1rem' : '2rem',
-          height: (activeMenu === 'upload' || activeMenu === 'generateui') ? '100%' : 'auto'
+          maxWidth: isFullWidth ? 'none' : '64rem',
+          margin: isFullWidth ? '0' : '0 auto',
+          padding: isFullWidth ? (isSidebarCollapsed ? '0.5rem 1rem' : '0.5rem 1rem 1rem 0.5rem') : '2rem',
+          height: isFullWidth ? '100%' : 'auto',
+          width: '100%'
         }} className="content-container">
           {renderContent()}
         </div>

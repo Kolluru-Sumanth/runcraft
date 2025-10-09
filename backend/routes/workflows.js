@@ -216,9 +216,9 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
           console.log('� All credentials configured - attempting auto-activation...');
           const activationResult = await workflowAnalysisService.activateWorkflow(deployResult.workflowId);
           if (activationResult.success) {
-            workflow.status = 'active';
+            // Use model-level activation to set isActive, lastActivation and record history
+            await workflow.activate();
             console.log('✅ Workflow auto-activated successfully!');
-            await workflow.addDeploymentHistory('activated', 'Workflow auto-activated');
             
             // Get live webhook URLs from the activated workflow
             console.log('🔗 Retrieving live webhook URLs from activated workflow...');
@@ -724,6 +724,23 @@ router.post('/:id/credentials', protect, async (req, res) => {
             await workflow.addDeploymentHistory('updated', 
               `Assigned ${assignResult.credentialsAssigned} credentials to workflow`);
 
+            // Update workflow credentialRequirements to mark the assigned credentials as configured
+            try {
+              credentialMappings.forEach(mapping => {
+                const req = workflow.credentialRequirements.find(r => (
+                  r.credentialType === mapping.credentialType && (r.nodeId === mapping.nodeId || r.nodeName === mapping.nodeName)
+                ));
+                if (req) {
+                  req.isConfigured = true;
+                  req.n8nCredentialId = mapping.credentialId;
+                }
+              });
+              await workflow.save();
+              console.log('✅ Workflow credentialRequirements updated with configured credentials');
+            } catch (updateErr) {
+              console.error('❌ Failed to update workflow credentialRequirements after assignment:', updateErr.message);
+            }
+
             // Auto-activate workflow after successful credential assignment
             console.log(`🚀 Attempting to activate workflow ${workflow.n8nWorkflowId}...`);
             try {
@@ -731,8 +748,8 @@ router.post('/:id/credentials', protect, async (req, res) => {
               
               if (activationResult.success) {
                 console.log(`✅ Workflow activated successfully!`);
-                workflow.status = 'active';
-                await workflow.addDeploymentHistory('activated', 'Workflow activated after credential assignment');
+                // Use the model method to set isActive, lastActivation, status and record history
+                await workflow.activate();
                 
                 // Get webhook URLs from the activated workflow
                 console.log(`🔗 Retrieving webhook URLs...`);
@@ -829,8 +846,8 @@ router.post('/:id/credentials', protect, async (req, res) => {
             console.log('🔄 Attempting auto-activation...');
             const activationResult = await workflowAnalysisService.activateWorkflow(deployResult.workflowId);
             if (activationResult.success) {
-              workflow.status = 'active';
-              await workflow.addDeploymentHistory('activated', 'Workflow auto-activated after credentials configuration');
+              // Ensure model-level activation updates (isActive, lastActivation) and history are applied
+              await workflow.activate();
             }
           }
 
@@ -910,8 +927,8 @@ router.post('/:id/activate', protect, async (req, res) => {
     console.log(`✅ Workflow activated successfully!`);
     
     // Update workflow status
-    workflow.status = 'active';
-    await workflow.addDeploymentHistory('activated', 'Workflow manually activated');
+  // Use model method to ensure isActive, lastActivation and history are set
+  await workflow.activate();
 
     // Get webhook URLs
     console.log(`🔗 Retrieving webhook URLs...`);
