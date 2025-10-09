@@ -162,7 +162,7 @@ function SignUp() {
             color: '#111827',
             margin: '0 0 0.25rem 0'
           }}>
-            Join Runcraft
+            Join Astraflow
           </h1>
           <p style={{
             color: '#6b7280',

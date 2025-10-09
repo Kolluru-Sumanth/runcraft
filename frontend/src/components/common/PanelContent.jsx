@@ -14,7 +14,7 @@ function PanelContent({ workflow, onFileUpload, onGenerateUI, isGenerating, onCl
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>Runcraft</h1>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>Astraflow</h1>
               <p style={{ color: '#4b5563', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>Transform n8n workflows</p>
             </div>
             <button
@@ -37,7 +37,7 @@ function PanelContent({ workflow, onFileUpload, onGenerateUI, isGenerating, onCl
         
         {!isMobile && (
           <div style={{ marginBottom: '1rem' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', margin: '0 0 0.5rem 0' }}>Runcraft</h1>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', margin: '0 0 0.5rem 0' }}>Astraflow</h1>
             <p style={{ color: '#4b5563', fontSize: '0.875rem', margin: 0 }}>Transform n8n workflows into React applications</p>
           </div>
         )}

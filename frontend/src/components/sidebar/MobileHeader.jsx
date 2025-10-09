@@ -31,7 +31,7 @@ function MobileHeader({  onToggleSidebar, workflow, user, onSignOut }) {
             </svg>
           </button>
           <h1 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-            Runcraft
+            Astraflow
           </h1>
         </div>
         

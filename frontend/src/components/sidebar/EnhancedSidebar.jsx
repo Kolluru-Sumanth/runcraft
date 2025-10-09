@@ -18,10 +18,10 @@ function EnhancedSidebar({
     { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
     { id: 'workflows', icon: '🔄', label: 'Workflows' },
     { id: 'upload', icon: '📤', label: 'Upload' },
+    { id: 'generateui', icon: '🛠️', label: 'Generate UI' },
     { id: 'templates', icon: '📋', label: 'Templates' },
     { id: 'executions', icon: '⚡', label: 'Executions' },
     { id: 'credentials', icon: '🔐', label: 'Credentials' },
-    { id: 'ui', icon: '🎨', label: 'UI' },
     { id: 'settings', icon: '⚙️', label: 'Settings' }
   ];
 
@@ -89,7 +89,7 @@ function EnhancedSidebar({
                 boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
                 transition: 'all 0.3s ease'
               }}>
-                R
+                A
               </div>
               <div>
                 <h1 style={{ 
@@ -99,7 +99,7 @@ function EnhancedSidebar({
                   margin: 0,
                   transition: 'all 0.3s ease'
                 }}>
-                  Runcraft
+                  Astraflow
                 </h1>
               </div>
             </div>
@@ -133,7 +133,7 @@ function EnhancedSidebar({
             }}
             title="Click to expand sidebar"
             >
-              R
+                A
             </div>
           )}
 

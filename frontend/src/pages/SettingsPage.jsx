@@ -4,7 +4,7 @@ function SettingsPage({ user }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     general: {
-      siteName: 'RunCraft',
+  siteName: 'Astraflow',
       defaultTimeout: 30,
       autoSave: true,
       notifications: true
@@ -697,7 +697,7 @@ function SettingsPage({ user }) {
             fontSize: '1rem', 
             margin: 0 
           }}>
-            Configure your RunCraft installation and preferences
+            Configure your Astraflow installation and preferences
           </p>
         </div>
         
