@@ -109,7 +109,11 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
         console.warn('Missing required values:', { prompt, selectedWorkflow, user });
         return;
       }
-        setChatHistory(prev => [...prev, { role: 'user', content: prompt }]);
+        setChatHistory(prev => [
+          ...prev,
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: 'Thinking...', thinking: true }
+        ]);
         setIsThinking(true);
       try {
         const token = localStorage.getItem('runcraft_token');
@@ -157,7 +161,18 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
             if (msg.content.includes('```')) return false;
             return !codePatterns.some(pat => pat.test(msg.content));
           });
-          setChatHistory(filteredMessages.map(msg => ({ role: msg.role, content: msg.content })));
+            setChatHistory(prev => {
+              // Remove the last 'Thinking...' message if present
+              const newHistory = prev.filter((msg, idx, arr) => {
+                // Only remove the last message if it is 'Thinking...'
+                if (idx === arr.length - 1 && msg.thinking) return false;
+                return true;
+              });
+              return [
+                ...newHistory,
+                ...filteredMessages.map(msg => ({ role: msg.role, content: msg.content }))
+              ];
+            });
           // set preview url if backend returned one
           const possibleUrl = data.url || data.preview_url || data.url_preview || '';
           console.log('API response preview url candidate:', possibleUrl);
@@ -169,7 +184,14 @@ function GenerateUI({ onFileUpload, user, workflow, isGenerating }) {
             if (found && found[0]) setPreviewUrl(found[0]);
           }
         } else if (data && data.message) {
-          setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
+            setChatHistory(prev => {
+              // Remove the last 'Thinking...' message if present
+              const newHistory = prev.filter((msg, idx, arr) => {
+                if (idx === arr.length - 1 && msg.thinking) return false;
+                return true;
+              });
+              return [...newHistory, { role: 'assistant', content: data.message }];
+            });
         }
       } catch (err) {
         setChatHistory(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
