@@ -498,6 +498,8 @@ function UploadPanel({ onFileUpload, user, workflow }) {
                         const info = isActive
                           ? { label: 'Active', color: '#10b981', bg: '#dcfce7' }
                           : { label: 'Inactive', color: '#6b7280', bg: '#f3f4f6' };
+                            // Fix: Define statusKey for display
+                            const statusKey = workflow?.status || currentWorkflow?.status || 'uploaded';
                         return (
                           <>
                             <div style={{ 
