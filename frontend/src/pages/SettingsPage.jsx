@@ -115,7 +115,7 @@ function SettingsPage({ user }) {
         General Settings
       </h3>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div>
           <label style={{ 
             display: 'block', 
@@ -549,6 +549,27 @@ function SettingsPage({ user }) {
     </div>
   );
 
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone and will delete all your workflows and credentials.')) return;
+    try {
+      // 1. Delete user from n8n
+      await fetch(`https://your-instance-name.app.n8n.cloud/api/v1/users/${user.n8nConfig?.userId || user.n8nUserId || user._id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'X-N8N-API-KEY': user.n8nConfig?.apiToken || user.n8nApiToken || 'YOUR_SECRET_TOKEN'
+          }
+        });
+      // 2. Delete workflows and credentials from backend
+      await fetch(`/api/users/${user._id}/delete-all`, { method: 'DELETE' });
+      // 3. Log out and redirect
+      localStorage.clear();
+      window.location.href = '/signin';
+    } catch (err) {
+      alert('Error deleting account: ' + (err.message || err));
+    }
+  };
+
   const renderSecuritySettings = () => (
     <div>
       <h3 style={{ 
@@ -558,34 +579,8 @@ function SettingsPage({ user }) {
       }}>
         Security Settings
       </h3>
-      
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <div>
-          <label style={{ 
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            cursor: 'pointer'
-          }}>
-            <input
-              type="checkbox"
-              checked={settings.security.enableEncryption}
-              onChange={(e) => handleSettingChange('security', 'enableEncryption', e.target.checked)}
-              style={{ transform: 'scale(1.1)' }}
-            />
-            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>
-              Enable credential encryption
-            </span>
-          </label>
-          <p style={{ 
-            fontSize: '0.75rem', 
-            color: '#6b7280', 
-            margin: '0.5rem 0 0 1.5rem' 
-          }}>
-            Encrypt stored credentials for additional security
-          </p>
-        </div>
-
+        {/* Example: Session Timeout */}
         <div>
           <label style={{ 
             display: 'block', 
@@ -612,6 +607,34 @@ function SettingsPage({ user }) {
           />
         </div>
 
+        {/* Example: Credential Encryption */}
+        <div>
+          <label style={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={settings.security.enableEncryption}
+              onChange={(e) => handleSettingChange('security', 'enableEncryption', e.target.checked)}
+              style={{ transform: 'scale(1.1)' }}
+            />
+            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>
+              Enable credential encryption
+            </span>
+          </label>
+          <p style={{ 
+            fontSize: '0.75rem', 
+            color: '#6b7280', 
+            margin: '0.5rem 0 0 1.5rem' 
+          }}>
+            Encrypt stored credentials for additional security
+          </p>
+        </div>
+
+        {/* Example: Require Password Change */}
         <div>
           <label style={{ 
             display: 'flex',
@@ -631,6 +654,7 @@ function SettingsPage({ user }) {
           </label>
         </div>
 
+        {/* Example: Two-Factor Auth */}
         <div>
           <label style={{ 
             display: 'flex',
@@ -654,6 +678,29 @@ function SettingsPage({ user }) {
             margin: '0.5rem 0 0 1.5rem' 
           }}>
             Requires app restart to take effect
+          </p>
+        </div>
+
+        {/* Delete Account button at the very end */}
+        <div style={{ marginTop: '2.5rem' }}>
+          <button
+            onClick={handleDeleteAccount}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '0.95rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(220,38,38,0.08)'
+            }}
+          >
+            Delete Account
+          </button>
+          <p style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+            This will permanently delete your account, workflows, and credentials.
           </p>
         </div>
       </div>

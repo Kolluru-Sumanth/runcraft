@@ -357,4 +357,38 @@ router.get('/:id', restrictTo('admin'), async (req, res) => {
   }
 });
 
+// @desc    Delete user, workflows, and chats
+// @route   DELETE /api/users/:id/delete-all
+// @access  Private/Admin or user self
+router.delete('/:id/delete-all', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    // Only allow admin or the user themselves
+    if (req.user.role !== 'admin' && req.user.id !== userId) {
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Not authorized to delete this user'
+      });
+    }
+
+    // Delete user
+    await User.findByIdAndDelete(userId);
+    // Delete workflows
+    await require('../models/Workflow').deleteMany({ userId });
+    // Delete chats
+    await require('../models/Chat').deleteMany({ userId });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'User, workflows, and chats deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete-all error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error deleting user and related data'
+    });
+  }
+});
+
 module.exports = router;

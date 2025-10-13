@@ -375,106 +375,98 @@ Format your response as JSON:
 
       // Extract workflow context for better descriptions
       const workflowSummary = this.extractWorkflowSummary(workflowData);
-      
-      // Filter to get only the primary webhook URLs (avoid duplicates and test URLs)
-      const primaryWebhooks = this.filterPrimaryWebhooks(webhookUrls);
-      
-      // Build detailed webhook information including expected payloads
-      const webhookInfo = primaryWebhooks.map(webhook => {
+      const workflowPurpose = this.generateWorkflowPurpose(workflowData, workflowSummary);
+
+      // Use all webhooks, not just primary, for full listing
+      const apiTypeMap = [
+        {
+          keywords: ['login', 'signin', 'auth'],
+          method: 'POST',
+          payload: '{"email": "user@example.com", "password": "yourpassword"}',
+          headers: { "Content-Type": "application/json" },
+          response: { "Token": "{{ $json.token }}" }
+        },
+        {
+          keywords: ['signup', 'register'],
+          method: 'POST',
+          payload: '{"email": "user@example.com", "password": "yourpassword"}',
+          headers: { "Content-Type": "application/json" },
+          response: { "Token": "{{ $('Signup').item.json.headers.authorization }}" }
+        },
+        {
+          keywords: ['addlist', 'create', 'add'],
+          method: 'POST',
+          payload: '{"title": "My First Task", "description": "Task details"}',
+          headers: { "Authorization": "Bearer <JWT Token>", "Content-Type": "application/json" },
+          response: { "message": "Added Successfully" }
+        },
+        {
+          keywords: ['alltodos', 'list', 'getall', 'fetchall'],
+          method: 'GET',
+          payload: '{}',
+          headers: { "Authorization": "Bearer <JWT Token>" },
+          response: { "ToDos": [{ "userID": "user_id", "title": "My First Task", "description": "Task details", "is_completed": false }] }
+        },
+        {
+          keywords: ['update', 'patch'],
+          method: 'PATCH',
+          payload: '{"ToDoID": "todo_id"}',
+          headers: { "Authorization": "Bearer <JWT Token>", "Content-Type": "application/json" },
+          response: { "message": "Marked as completed" }
+        }
+      ];
+
+      const webhooks = webhookUrls.map((webhook, idx) => {
         const nodeId = webhook.nodeId;
         const node = workflowData.nodes?.find(n => n.id === nodeId);
-        
-        // Extract expected payload information from node configuration
-        let expectedPayload = '{"message": "text", "user_id": "123"}';
-        let payloadFields = [];
-        
-        if (node) {
-          // Analyze node parameters to determine expected payload structure
+        const urlStr = (webhook.webhookUrl || webhook.url || '').toLowerCase();
+        const nameStr = (webhook.nodeName || webhook.name || '').toLowerCase();
+        let detected = null;
+        for (const apiType of apiTypeMap) {
+          if (apiType.keywords.some(k => urlStr.includes(k) || nameStr.includes(k))) {
+            detected = apiType;
+            break;
+          }
+        }
+
+        let method = webhook.method || (detected ? detected.method : 'POST');
+        let expectedPayload = detected ? detected.payload : '{"message": "text", "user_id": "123"}';
+        let headers = detected ? { ...detected.headers } : { "Content-Type": "application/json" };
+        let response = detected ? { ...detected.response } : { "message": "Added Successfully" };
+
+        // Fallbacks and node-based hints
+        if (!detected && node) {
           if (node.type === 'n8n-nodes-base.webhook') {
-            if (node.parameters?.options?.allowedOrigins) {
-              payloadFields.push('Origin validation required');
-            }
-            if (node.parameters?.responseMode) {
-              payloadFields.push(`Response mode: ${node.parameters.responseMode}`);
-            }
-            if (node.parameters?.options?.ignoreBots === false) {
-              payloadFields.push('Bot requests allowed');
-            }
-            
-            // Simple inline payload structure for better readability
             expectedPayload = '{"message": "text", "user_id": "123"}';
           } else if (node.type === 'n8n-nodes-base.chatTrigger') {
             expectedPayload = '{"chatInput": "user message", "sessionId": "abc"}';
           } else {
             expectedPayload = '{"data": "value"}';
           }
-        } else {
-          expectedPayload = '{"message": "text"}';
         }
 
         return {
-          url: webhook.webhookUrl || webhook.url,
-          nodeName: webhook.nodeName || webhook.name,
-          nodeType: webhook.nodeType || webhook.type,
-          method: webhook.method || 'POST',
-          expectedPayload,
-          payloadFields,
+          idx: idx + 1,
+          method,
+          endpoint: webhook.webhookUrl || webhook.url,
+          headers,
+          payload: expectedPayload,
+          response,
+          name: webhook.nodeName || webhook.name,
           purpose: this.inferWebhookPurpose(webhook.nodeName, node)
         };
       });
 
-      // Generate workflow purpose summary
-      const workflowPurpose = this.generateWorkflowPurpose(workflowData, workflowSummary);
+      // Build output string
+      let output = `Summary:\n This n8n workflow ${workflowPurpose}.\n\nWebhooks:`;
+      webhooks.forEach(w => {
+        output += `\n${w.idx}. ${w.name || w.endpoint}\n{\n  "api method": "${w.method}",\n  "end point": "${w.endpoint}",\n  "header": ${JSON.stringify(w.headers, null, 2)},\n  "payload": ${w.payload},\n  "response": ${JSON.stringify(w.response, null, 2)}\n}`;
+      });
 
-      const prompt = `
-You are an expert API integration specialist. Create a concise description that starts with what the workflow does, then explains how to integrate with the primary webhook endpoint.
-
-WORKFLOW PURPOSE: ${workflowPurpose}
-
-PRIMARY WEBHOOK ENDPOINT:
-${webhookInfo.length > 0 ? `
-${webhookInfo[0].method} ${webhookInfo[0].url}
-- Purpose: ${webhookInfo[0].purpose}
-- Expected Payload: ${webhookInfo[0].expectedPayload}
-- Node: ${webhookInfo[0].nodeName}
-` : 'No primary webhook found'}
-
-INSTRUCTIONS:
-- Start with: "This workflow [what it does]."
-- Then explain: "Send [METHOD] requests to [URL] with [payload] to [action]."
-- Use exactly 2 sentences maximum
-- Focus only on the PRIMARY webhook endpoint
-- Use natural language, not JSON format
-- Be specific and actionable
-
-EXAMPLE FORMAT:
-"This workflow processes chat messages using AI. Send POST requests to https://example.com/webhook with {"message": "text", "user_id": "123"} to trigger message processing."
-
-CRITICAL: Return ONLY the 2-sentence description, no extra text.`;
-
-      console.log('🔤 Generating specific webhook usage description...');
-      const response = await this.callLLM(prompt);
-      
-      if (response && response.trim()) {
-        let description = response.trim();
-        
-        // Safety check: ensure we're not returning JSON format
-        if (description.startsWith('{') || description.startsWith('[') || description.includes('"integration_guide"')) {
-          console.log('⚠️ AI returned JSON, converting to natural language...');
-          description = this.convertJsonToNaturalLanguage(webhookInfo, workflowPurpose);
-        }
-        
-        console.log('✅ Generated webhook usage description');
-        return description;
-      } else {
-        return this.generateFallbackDescription(webhookInfo, workflowPurpose);
-      }
-
+      return output;
     } catch (error) {
       console.error('❌ Error generating webhook usage description:', error.message);
-      const primaryWebhooks = this.filterPrimaryWebhooks(webhookUrls);
-      const workflowPurpose = this.generateWorkflowPurpose(workflowData, this.extractWorkflowSummary(workflowData));
-      return this.generateFallbackDescription(primaryWebhooks, workflowPurpose);
+      return "Error generating webhook usage description.";
     }
   }
 

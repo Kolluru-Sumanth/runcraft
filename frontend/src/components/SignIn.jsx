@@ -130,7 +130,7 @@ function SignIn() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <span style={{ color: 'white', fontSize: '1.5rem', fontWeight: 'bold' }}>R</span>
+            <span style={{ color: 'white', fontSize: '1.5rem', fontWeight: 'bold' }}>A</span>
           </div>
           <h1 style={{
             fontSize: '1.75rem',
@@ -237,6 +237,9 @@ function SignIn() {
                 {errors.password}
               </p>
             )}
+            <div style={{ marginTop: '8px', textAlign: 'right' }}>
+              <a href="/forgot-password" style={{ color: '#667eea', fontSize: '0.875rem', textDecoration: 'underline' }}>Forgot password?</a>
+            </div>
           </div>
 
           {/* Submit Error */}
@@ -317,7 +320,8 @@ function SignIn() {
           }}>
             Don't have an account?{' '}
             <button
-              onClick={() => setCurrentView('signUp')}
+              type="button"
+              onClick={() => window.location.href = '/signup'}
               style={{
                 color: '#667eea',
                 background: 'none',
