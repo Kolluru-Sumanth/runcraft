@@ -1,3 +1,33 @@
+/* Global dark mode styles */
+body.dark-mode {
+  background-color: #18181b;
+  color: #f3f4f6;
+}
+
+body.dark-mode .desktop-sidebar,
+body.dark-mode .mobile-sidebar {
+  background-color: #23232a;
+  border-right: 1px solid #2d2d34;
+}
+
+body.dark-mode a,
+body.dark-mode button,
+body.dark-mode input,
+body.dark-mode select {
+  color: #f3f4f6;
+  background-color: #23232a;
+  border-color: #2d2d34;
+}
+
+body.dark-mode .mobile-overlay {
+  background-color: rgba(24, 24, 27, 0.7);
+}
+
+/* Optional: Light mode (default) styles */
+body {
+  background-color: #fafbfc;
+  color: #23232a;
+}
 /* Basic reset and fonts */
 @import "tailwindcss";
 

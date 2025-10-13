@@ -247,17 +247,19 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
                 console.log('📍 Updated with live webhook URLs from n8n');
                 console.log('📍 Updated with live webhook URLs:', JSON.stringify(liveWebhookTriggers, null, 2));
                 
-                // Regenerate webhook usage description with the correct live URLs
+                // Regenerate webhook usage description with the correct live URLs and persist it
                 try {
                   console.log('🔤 Regenerating webhook usage description with live URLs...');
                   const updatedWebhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
                     workflow.workflowData, 
                     workflow.triggerInfo
                   );
-                  workflow.webhookUsageDescription = updatedWebhookDescription;
-                  console.log('✅ Regenerated webhook usage description with live URLs');
+                  const desc = String(updatedWebhookDescription || '').trim().slice(0, 1000);
+                  workflow.webhookUsageDescription = desc;
+                  await workflow.save();
+                  console.log('✅ Regenerated and saved webhook usage description with live URLs (len=' + desc.length + ')');
                 } catch (descriptionError) {
-                  console.error('❌ Failed to regenerate webhook description with live URLs:', descriptionError.message);
+                  console.error('❌ Failed to regenerate or save webhook description with live URLs:', descriptionError && descriptionError.message ? descriptionError.message : descriptionError);
                 }
               }
             } catch (webhookError) {
@@ -306,13 +308,18 @@ router.post('/upload', protect, upload.single('workflow'), async (req, res) => {
         if (workflow.triggerInfo && workflow.triggerInfo.length > 0 && !workflow.webhookUsageDescription) {
           try {
             console.log('🔤 Generating webhook usage description for initial upload (fallback)...');
-            const webhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
-              workflow.workflowData, 
-              workflow.triggerInfo
-            );
-            workflow.webhookUsageDescription = webhookDescription;
-            await workflow.save();
-            console.log('✅ Generated webhook usage description for initial upload (fallback)');
+            try {
+              const webhookDescription = await llmWorkflowService.generateWebhookUsageDescription(
+                workflow.workflowData, 
+                workflow.triggerInfo
+              );
+              const desc = String(webhookDescription || '').trim().slice(0, 1000);
+              workflow.webhookUsageDescription = desc;
+              await workflow.save();
+              console.log('✅ Generated and saved webhook usage description for initial upload (fallback) (len=' + desc.length + ')');
+            } catch (descriptionError) {
+              console.error('❌ Failed to generate or save webhook description for initial upload:', descriptionError && descriptionError.message ? descriptionError.message : descriptionError);
+            }
           } catch (descriptionError) {
             console.error('❌ Failed to generate webhook description for initial upload:', descriptionError.message);
           }
