@@ -549,7 +549,7 @@ function InsightsTab({ llmAnalysis, workflow }) {
             Recommended URL Patterns
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {llmAnalysis.urlPatterns.map((pattern, index) => (
+            {llmAnalysis.urlPatterns.map((item, index) => (
               <div
                 key={index}
                 style={{
@@ -559,10 +559,12 @@ function InsightsTab({ llmAnalysis, workflow }) {
                   border: '1px solid #e5e7eb',
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
-                  color: '#374151'
+                  color: '#374151',
+                  marginBottom: '0.5rem'
                 }}
               >
-                {pattern}
+                <div><strong>{item.pattern}</strong></div>
+                <div style={{ color: '#6b7280', fontSize: '0.85em', marginTop: '0.25rem' }}>{item.description}</div>
               </div>
             ))}
           </div>

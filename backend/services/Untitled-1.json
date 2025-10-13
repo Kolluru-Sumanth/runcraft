@@ -1,0 +1,161 @@
+// Summary: This n8n workflow processes incoming webhook requests and triggers automated actions.
+//  Webhooks:
+  1. Signup {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/cda451cc-9491-4495-8e41-5994e33557fe",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "email": "user@example.com",
+        "password": "yourpassword"
+    },
+    "response": {
+        "Token": "{{ $('Signup').item.json.headers.authorization }}"
+    }
+} 2. Respond to Webhook {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 3. Respond to Webhook1 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 4. login {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/bdc75317-e716-41c3-9be3-ec2af8942fcd",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "email": "user@example.com",
+        "password": "yourpassword"
+    },
+    "response": {
+        "Token": "{{ $json.token }}"
+    }
+} 5. Respond to Webhook2 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 6. Respond to Webhook3 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 7. Add List {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/8d8a80f8-04e6-430a-ae10-01969fb6821e",
+    "header": {
+        "Authorization": "Bearer <JWT Token>",
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "title": "My First Task",
+        "description": "Task details"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 8. Respond to Webhook4 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 9. AllToDos {
+    "api method": "GET",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/bdc75317-e716-41c3-9be3-ec2af8942fcd",
+    "header": {
+        "Authorization": "Bearer <JWT Token>"
+    },
+    "payload": {},
+    "response": {
+        "ToDos": [
+            {
+                "userID": "user_id",
+                "title": "My First Task",
+                "description": "Task details",
+                "is_completed": false
+            }
+        ]
+    }
+} 10. Respond to Webhook5 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+} 11. update_ToDoList {
+    "api method": "GET",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/bdc75317-e716-41c3-9be3-ec2af8942fcd",
+    "header": {
+        "Authorization": "Bearer <JWT Token>"
+    },
+    "payload": {},
+    "response": {
+        "ToDos": [
+            {
+                "userID": "user_id",
+                "title": "My First Task",
+                "description": "Task details",
+                "is_completed": false
+            }
+        ]
+    }
+} 12. Respond to Webhook6 {
+    "api method": "POST",
+    "end point": "https://n8n.jayaprakash.space/webhook/test346/O4EeX0KRUxKZ23L9",
+    "header": {
+        "Content-Type": "application/json"
+    },
+    "payload": {
+        "data": "value"
+    },
+    "response": {
+        "message": "Added Successfully"
+    }
+}

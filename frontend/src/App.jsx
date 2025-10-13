@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 import SignIn from './components/SignIn';
 import SignUp from './components/SignUp';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import WorkflowApp from './components/WorkflowApp';
 
 function AppContent() {
@@ -14,6 +16,8 @@ function AppContent() {
       <div style={{ minHeight: '100vh', backgroundColor: '#0f172a' }}>
         <Routes>
           <Route path="/signup" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="*" element={
             currentView === 'signUp' ? <SignUp /> : <SignIn />
