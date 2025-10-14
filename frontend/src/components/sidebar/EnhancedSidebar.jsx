@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 function EnhancedSidebar({ 
   isCollapsed, 
@@ -14,19 +14,7 @@ function EnhancedSidebar({
   onGenerateUI,
   isGenerating
 }) {
-  const [darkMode, setDarkMode] = useState(() => document.body.classList.contains('dark-mode'));
-
-  const handleThemeToggle = () => {
-    setDarkMode((prev) => {
-      const next = !prev;
-      if (next) {
-        document.body.classList.add('dark-mode');
-      } else {
-        document.body.classList.remove('dark-mode');
-      }
-      return next;
-    });
-  };
+  // Dark mode removed: no local state or toggle handler
   const menuItems = [
     { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
     { id: 'workflows', icon: '🔄', label: 'Workflows' },
@@ -315,79 +303,8 @@ function EnhancedSidebar({
           flexDirection: 'column',
           alignItems: isCollapsed ? 'center' : 'flex-start'
         }}>
-          {/* Animated theme toggle switch above user chip */}
-          <div
-            onClick={handleThemeToggle}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              marginBottom: isCollapsed ? '1.25rem' : '0.75rem',
-              width: '100%',
-              userSelect: 'none',
-              minHeight: '48px',
-              paddingLeft: 0,
-              paddingRight: 0
-            }}
-            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            <div style={{
-              width: '100%',
-              maxWidth: '220px',
-              height: '40px',
-              borderRadius: '20px',
-              background: darkMode ? 'linear-gradient(90deg,#1f2937 60%,#374151 100%)' : 'linear-gradient(90deg,#f3f4f6 60%,#e5e7eb 100%)',
-              position: 'relative',
-              transition: 'background 0.3s',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.10)',
-              margin: '0 auto',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 500,
-              fontSize: '1rem',
-              color: darkMode ? '#fbbf24' : '#374151',
-              letterSpacing: '0.02em',
-              overflow: 'hidden'
-            }}>
-              <span style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 1,
-                pointerEvents: 'none',
-                transition: 'color 0.3s',
-                color: darkMode ? '#fbbf24' : '#374151',
-                fontWeight: 600,
-                fontSize: '1rem',
-                whiteSpace: 'nowrap'
-              }}>
-                {darkMode ? 'Dark Mode' : 'Light Mode'}
-              </span>
-              <div style={{
-                position: 'absolute',
-                top: '10px',
-                left: darkMode ? 'calc(100% - 30px)' : '10px',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: darkMode ? '#374151' : '#fff',
-                boxShadow: '0 1px 6px rgba(0,0,0,0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'left 0.3s, background 0.3s'
-              }}>
-                {darkMode ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e42" strokeWidth="2"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="5.22" y1="5.22" x2="7.64" y2="7.64"/><line x1="16.36" y1="16.36" x2="18.78" y2="18.78"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="5.22" y1="18.78" x2="7.64" y2="16.36"/><line x1="16.36" y1="7.64" x2="18.78" y2="5.22"/></svg>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Theme toggle removed: simplified spacing above user chip */}
+            <div style={{ marginBottom: isCollapsed ? '1.25rem' : '0.75rem', width: '100%' }} />
 
           {isCollapsed ? (
             <div style={{
